@@ -70,8 +70,7 @@ export async function confirmAndRecord(
   return obligation;
 }
 
-
-function reasonOf(e: unknown): string {
+export function reasonOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 

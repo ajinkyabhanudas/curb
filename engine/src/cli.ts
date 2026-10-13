@@ -9,9 +9,10 @@ import { parseObligation, type Applicability } from './obligation/obligation.ts'
 import { AuditCorruptError, FsAuditLog, FsBlobStore } from './store/fs.ts';
 import { diffResults, renderDeltaMarkdown } from './report/delta.ts';
 import { parseResultFile, verifyResultIntegrity } from './schema/result.ts';
+import type { ResultFile } from './schema/types.ts';
 import { safeText, stringifyForOutput } from './terminal.ts';
 import { cell, renderMarkdown } from './report/markdown.ts';
-import { confirmAndRecord, exitCodeFor, recordRefusal, scanAndRecord, type Deps } from './workflow.ts';
+import { confirmAndRecord, exitCodeFor, reasonOf, recordRefusal, scanAndRecord, type Deps } from './workflow.ts';
 
 type Values = Record<string, string | boolean | undefined>;
 
@@ -21,8 +22,12 @@ function need(values: Values, name: string): string {
   return v;
 }
 
+function storePath(values: Values): string {
+  return String(values.store ?? '.curb');
+}
+
 function makeDeps(values: Values, actor: string): Deps {
-  const store = String(values.store ?? '.curb');
+  const store = storePath(values);
   return {
     ctx: { tenantId: String(values.tenant ?? 'demo'), actor },
     blobs: new FsBlobStore(store),
@@ -138,7 +143,7 @@ async function scan(args: string[]): Promise<number> {
     },
   });
   const repo = need(values, 'repo');
-  const store = String(values.store ?? '.curb');
+  const store = storePath(values);
   await assertStoreOutsideRepo(store, repo);
   await checkOut(values.out, values.force);
   const deps = makeDeps(values, String(values.actor));
@@ -147,7 +152,7 @@ async function scan(args: string[]): Promise<number> {
   try {
     inputs = await loadInputs(values, seen);
   } catch (e) {
-    await recordRefusal(deps, seen.raw, e instanceof Error ? e.message : String(e));
+    await recordRefusal(deps, seen.raw, reasonOf(e));
     throw e;
   }
   const { card, hash, agreementRaw, obligation } = inputs;
@@ -175,6 +180,12 @@ async function scan(args: string[]): Promise<number> {
   return exitCodeFor(body.state);
 }
 
+async function readVerifiedResult(file: string): Promise<ResultFile> {
+  const result = parseResultFile(JSON.parse(await readFile(file, 'utf8')));
+  verifyResultIntegrity(result);
+  return result;
+}
+
 async function report(args: string[]): Promise<void> {
   const { values } = parseArgs({
     args,
@@ -185,8 +196,7 @@ async function report(args: string[]): Promise<void> {
   });
   if (values.format !== 'md' && values.format !== 'json') throw new Error(`--format must be md or json, got "${values.format}"`);
   await checkOut(values.out, values.force);
-  const file = parseResultFile(JSON.parse(await readFile(need(values, 'result'), 'utf8')));
-  verifyResultIntegrity(file);
+  const file = await readVerifiedResult(need(values, 'result'));
   const { card, hash, agreement, obligation } = await loadInputs(values);
   const expected: Record<string, string> = {
     obligationHash: obligation.id,
@@ -218,13 +228,8 @@ async function diff(args: string[]): Promise<void> {
     options: { before: { type: 'string' }, after: { type: 'string' }, out: { type: 'string' }, force: { type: 'boolean' } },
   });
   await checkOut(values.out, values.force);
-  const read = async (name: string) => {
-    const file = parseResultFile(JSON.parse(await readFile(need(values, name), 'utf8')));
-    verifyResultIntegrity(file);
-    return file;
-  };
-  const before = await read('before');
-  const after = await read('after');
+  const before = await readVerifiedResult(need(values, 'before'));
+  const after = await readVerifiedResult(need(values, 'after'));
   if (before.envelope.resultHash === after.envelope.resultHash) throw new Error('both files are the same result; nothing to compare');
   const notes: string[] = [];
   if (Date.parse(before.envelope.startedAt) > Date.parse(after.envelope.startedAt)) {
@@ -263,6 +268,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((e: unknown) => {
-  process.stderr.write(`curb: ${safeText(e instanceof Error ? e.message : String(e))}\n`);
+  process.stderr.write(`curb: ${safeText(reasonOf(e))}\n`);
   process.exit(2);
 });

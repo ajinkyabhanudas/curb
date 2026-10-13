@@ -45,11 +45,7 @@ export function evaluate({ snapshot, card, allowlist }: EvaluationInput): Evalua
       unknownFiles.push({ path: file.path, reason: nonOk });
       continue;
     }
-    if (ext === '' && file.content?.startsWith('#!')) {
-      unknownFiles.push({ path: file.path, reason: 'unsupported-language' });
-      continue;
-    }
-    if (OTHER_LANG_EXT.has(ext)) {
+    if ((ext === '' && file.content?.startsWith('#!')) || OTHER_LANG_EXT.has(ext)) {
       unknownFiles.push({ path: file.path, reason: 'unsupported-language' });
       continue;
     }

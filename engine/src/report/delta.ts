@@ -45,7 +45,6 @@ function section(title: string, findings: Finding[]): string[] {
   return out;
 }
 
-const STATE_WORD = (st: ResultState) => st.toUpperCase();
 const NO_COMPLIANCE = "within this rule's scope only. This does not establish compliance.";
 
 /** What the pair of states means. Only an after-state of pass may speak of a fix; no other state is described as a pass. */
@@ -59,7 +58,7 @@ function stateMeaning(d: Delta): string[] {
     case 'pass':
       if (d.before === 'fail') out.push(`No references outside the allowlist were found in the evaluated files, ${NO_COMPLIANCE}`);
       else if (d.before === 'pass') out.push(`Both results are PASS ${NO_COMPLIANCE}`);
-      else if (d.before !== 'not-applicable') out.push(`The after result is PASS (the before result was ${STATE_WORD(d.before)}) ${NO_COMPLIANCE}`);
+      else if (d.before !== 'not-applicable') out.push(`The after result is PASS (the before result was ${d.before.toUpperCase()}) ${NO_COMPLIANCE}`);
       else out.push(`The after result is PASS ${NO_COMPLIANCE}`);
       break;
     case 'fail':
@@ -68,7 +67,7 @@ function stateMeaning(d: Delta): string[] {
       } else if (d.before === 'fail') {
         out.push(`Some findings remain: ${d.unchanged.length} unchanged, ${d.added.length} new, ${gone} no longer reported.`);
       } else {
-        out.push(`The after result has findings (${d.added.length} new); the before result was ${STATE_WORD(d.before)}.`);
+        out.push(`The after result has findings (${d.added.length} new); the before result was ${d.before.toUpperCase()}.`);
       }
       break;
     case 'unknown':
