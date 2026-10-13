@@ -21,7 +21,7 @@ export interface ScanInput {
 export async function runScan(
   input: ScanInput,
   evaluateFn: typeof evaluate = evaluate,
-): Promise<{ body: ResultBody; resultHash: string }> {
+): Promise<{ body: ResultBody; resultHash: string; diagnostics: string[] }> {
   const { card, cardHash, agreement, obligation } = input;
   verifyObligation(obligation);
   if (obligation.policyCardId !== card.id || obligation.policyCardVersion !== card.version) {
@@ -38,12 +38,14 @@ export async function runScan(
 
   const snapshot = await takeSnapshot(input.repoPath, { skipDirs: card.exclusions.dirs });
   let outcome: EvaluationOutput;
+  const diagnostics: string[] = [];
   if (obligation.applicability === 'not-applicable') {
     outcome = { state: 'not-applicable', findings: [], unknownFiles: [], filesEvaluated: 0, notes: ['human-recorded-not-applicable'] };
   } else {
     try {
       outcome = evaluateFn({ snapshot, card, allowlist: obligation.allowlist });
-    } catch {
+    } catch (e) {
+      diagnostics.push(String(e));
       outcome = { state: 'error', findings: [], unknownFiles: [], filesEvaluated: 0, notes: ['evaluator-exception'] };
     }
   }
@@ -64,5 +66,5 @@ export async function runScan(
     exclusions: [...card.exclusions.dirs.map((d) => `dir:${d}`), ...card.exclusions.files.map((f) => `file:${f}`)].sort(),
     notes: outcome.notes,
   };
-  return { body, resultHash: sha256(canonicalize(body)) };
+  return { body, resultHash: sha256(canonicalize(body)), diagnostics };
 }

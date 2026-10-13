@@ -7,8 +7,9 @@ import {
   type Obligation,
 } from './obligation/obligation.ts';
 import type { PolicyCard } from './policy/card.ts';
-import type { ResultFile } from './schema/types.ts';
-import { ObligationNotActiveError, runScan } from './scan.ts';
+import type { ResultFile, ResultState } from './schema/types.ts';
+import type { evaluate } from './evaluator/evaluate.ts';
+import { runScan } from './scan.ts';
 import type { AuditLog, BlobStore, TenantContext } from './store/types.ts';
 
 export interface Deps {
@@ -67,26 +68,50 @@ export async function confirmAndRecord(
   return obligation;
 }
 
+const HEX64 = /^[0-9a-f]{64}$/;
+
+function reasonOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Best effort: records that a scan was refused or failed before producing a result. Never throws. */
+export async function recordRefusal(deps: Deps, raw: unknown, reason: string): Promise<void> {
+  try {
+    const data: Record<string, string> = { reason: reason.slice(0, 200) };
+    const id = typeof raw === 'object' && raw !== null ? (raw as { id?: unknown }).id : undefined;
+    if (typeof id === 'string' && HEX64.test(id)) data.obligationId = id;
+    await deps.audit.append(deps.ctx, 'scan.refused', data);
+  } catch {
+    // The caller rethrows the original error; a failed audit write must not replace it.
+  }
+}
+
+export function exitCodeFor(state: ResultState): number {
+  return state === 'error' ? 3 : 0;
+}
+
 export async function scanAndRecord(
   deps: Deps,
   a: { repoPath: string; agreementRaw: Uint8Array; card: PolicyCard; cardHash: string; obligation: Obligation },
-): Promise<ResultFile> {
+  evaluateFn?: typeof evaluate,
+): Promise<ResultFile & { diagnostics: string[] }> {
   const now = deps.now ?? (() => new Date());
-  const agreement = ingestAgreement(a.agreementRaw);
   const startedAt = now().toISOString();
   let scanned;
   try {
-    scanned = await runScan({
-      repoPath: a.repoPath,
-      card: a.card,
-      cardHash: a.cardHash,
-      agreement,
-      obligation: a.obligation,
-    });
+    const agreement = ingestAgreement(a.agreementRaw);
+    scanned = await runScan(
+      {
+        repoPath: a.repoPath,
+        card: a.card,
+        cardHash: a.cardHash,
+        agreement,
+        obligation: a.obligation,
+      },
+      evaluateFn,
+    );
   } catch (e) {
-    if (e instanceof ObligationNotActiveError) {
-      await deps.audit.append(deps.ctx, 'scan.refused', { obligationId: a.obligation.id, reason: e.message });
-    }
+    await recordRefusal(deps, a.obligation, reasonOf(e));
     throw e;
   }
   const file: ResultFile = {
@@ -99,11 +124,18 @@ export async function scanAndRecord(
       tenantId: deps.ctx.tenantId,
     },
   };
-  await deps.blobs.put(deps.ctx, JSON.stringify(file, null, 2));
-  await deps.audit.append(deps.ctx, 'scan.completed', {
-    resultHash: file.envelope.resultHash,
-    state: file.body.state,
-    treeHash: file.body.treeHash,
-  });
-  return file;
+  try {
+    await deps.blobs.put(deps.ctx, JSON.stringify(file, null, 2));
+    await deps.audit.append(deps.ctx, 'scan.completed', {
+      resultHash: file.envelope.resultHash,
+      state: file.body.state,
+      treeHash: file.body.treeHash,
+    });
+  } catch (e) {
+    throw new Error(
+      `scan completed with result sha256:${file.envelope.resultHash} but recording failed: ${reasonOf(e)}`,
+      { cause: e },
+    );
+  }
+  return { ...file, diagnostics: scanned.diagnostics };
 }

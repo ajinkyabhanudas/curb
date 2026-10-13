@@ -1,10 +1,12 @@
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ingestAgreement } from '../src/agreement/ingest.ts';
 import { confirmObligation, locateQuote, type Applicability } from '../src/obligation/obligation.ts';
 import { loadCard } from '../src/policy/card.ts';
 import { ObligationNotActiveError, runScan } from '../src/scan.ts';
-import { CARD_PATH, QUOTE, confirmFixture, fixtureDeps, makeRepo, scanFixture } from './helpers.ts';
+import { exitCodeFor, recordRefusal, scanAndRecord } from '../src/workflow.ts';
+import { CARD_PATH, QUOTE, ROOT, confirmFixture, fixtureDeps, makeRepo, scanFixture } from './helpers.ts';
 
 describe('workflow on the mutated fixture', () => {
   it('produces a fail with one finding at providers.ts line 2 and records an audit trail', async () => {
@@ -117,5 +119,126 @@ describe('runScan gates', () => {
       https.request = originals.httpsRequest;
       dns.lookup = originals.lookup;
     }
+  });
+});
+
+describe('recording failures', () => {
+  const failing = (what: string) => ({
+    append: async () => {
+      throw new Error(what);
+    },
+    list: async () => [],
+    verify: async () => true,
+  });
+
+  async function refusedSetup() {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const needsCounsel = { ...confirmed.obligation, applicability: 'needs-counsel' as const };
+    return { deps, confirmed, needsCounsel };
+  }
+
+  it('rethrows the original refusal when the audit append also fails', async () => {
+    const { deps, confirmed } = await refusedSetup();
+    const { card, hash } = await loadCard(CARD_PATH);
+    const agreement = ingestAgreement(confirmed.agreementRaw);
+    const ob = confirmObligation(
+      {
+        agreementTextSha256: agreement.textSha256,
+        quote: QUOTE,
+        range: locateQuote(agreement.text, QUOTE),
+        policyCardId: card.id,
+        policyCardVersion: card.version,
+        applicability: 'needs-counsel',
+        allowlist: [],
+        approver: 'T',
+        approvedAt: '2026-10-13T09:00:00.000Z',
+      },
+      agreement,
+      card,
+    );
+    const broken = { ...deps, audit: failing('disk full') };
+    await expect(
+      scanAndRecord(broken, { repoPath: '.', agreementRaw: confirmed.agreementRaw, card, cardHash: hash, obligation: ob }),
+    ).rejects.toBeInstanceOf(ObligationNotActiveError);
+  });
+
+  it('recordRefusal never throws and keeps data plain', async () => {
+    const deps = await fixtureDeps();
+    await recordRefusal({ ...deps, audit: failing('nope') }, { id: 'x' }, 'r');
+    await recordRefusal(deps, { id: 'a'.repeat(64) }, 'z'.repeat(500));
+    await recordRefusal(deps, { id: 'short' }, 'no id');
+    const entries = await deps.audit.list(deps.ctx);
+    expect(entries.map((e) => e.type)).toEqual(['scan.refused', 'scan.refused']);
+    expect(entries[0].data).toEqual({ reason: 'z'.repeat(200), obligationId: 'a'.repeat(64) });
+    expect(entries[1].data).toEqual({ reason: 'no id' });
+  });
+
+  it('fails closed with the result hash when the blob store fails', async () => {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const broken = {
+      ...deps,
+      blobs: {
+        put: async (): Promise<string> => {
+          throw new Error('blob boom');
+        },
+        get: async () => null,
+      },
+    };
+    await expect(scanFixture(broken, confirmed, 'mutated')).rejects.toThrow(
+      /scan completed with result sha256:[0-9a-f]{64} but recording failed: blob boom/,
+    );
+  });
+
+  it('fails closed with the result hash when the scan.completed append fails', async () => {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const broken = { ...deps, audit: failing('audit boom') };
+    await expect(scanFixture(broken, confirmed, 'mutated')).rejects.toThrow(
+      /scan completed with result sha256:[0-9a-f]{64} but recording failed: audit boom/,
+    );
+  });
+});
+
+describe('diagnostics, exit codes and determinism', () => {
+  it('surfaces a swallowed evaluator exception as diagnostics, outside the hashed body', async () => {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const file = await scanAndRecord(
+      deps,
+      {
+        repoPath: path.join(ROOT, 'fixtures/repos/mutated'),
+        agreementRaw: confirmed.agreementRaw,
+        card: confirmed.card,
+        cardHash: confirmed.cardHash,
+        obligation: confirmed.obligation,
+      },
+      () => {
+        throw new Error('kaboom');
+      },
+    );
+    expect(file.body.state).toBe('error');
+    expect(file.diagnostics).toEqual(['Error: kaboom']);
+    expect(JSON.stringify(file.body)).not.toContain('kaboom');
+  });
+
+  it('maps only the error state to exit code 3', () => {
+    for (const s of ['pass', 'fail', 'unknown', 'not-applicable'] as const) expect(exitCodeFor(s)).toBe(0);
+    expect(exitCodeFor('error')).toBe(3);
+  });
+
+  it('gives the same result hash for a different actor and clock', async () => {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const a = await scanFixture(deps, confirmed, 'mutated');
+    const other = {
+      ...deps,
+      ctx: { ...deps.ctx, actor: 'someone-else' },
+      now: () => new Date('2030-01-01T00:00:00.000Z'),
+    };
+    const b = await scanFixture(other, confirmed, 'mutated');
+    expect(b.envelope.resultHash).toBe(a.envelope.resultHash);
+    expect(b.envelope.operator).toBe('someone-else');
   });
 });
