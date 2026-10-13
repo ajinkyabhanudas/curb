@@ -1,4 +1,6 @@
 // engine/test/evaluator.test.ts
+import { chmod, symlink } from 'node:fs/promises';
+import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { evaluate } from '../src/evaluator/evaluate.ts';
 import { loadCard, type PolicyCard } from '../src/policy/card.ts';
@@ -12,6 +14,11 @@ beforeAll(async () => {
 
 async function run(files: Record<string, string>, allowlist = ['anthropic']) {
   const snapshot = await takeSnapshot(await makeRepo(files), { skipDirs: card.exclusions.dirs });
+  return evaluate({ snapshot, card, allowlist });
+}
+
+async function runDir(dir: string, maxFileBytes?: number, allowlist = ['anthropic']) {
+  const snapshot = await takeSnapshot(dir, { skipDirs: card.exclusions.dirs, maxFileBytes });
   return evaluate({ snapshot, card, allowlist });
 }
 
@@ -151,5 +158,111 @@ describe('evaluate: unknown, scope and exclusions', () => {
     expect(out.unknownFiles).toEqual([]);
     expect(out.state).toBe('fail');
     expect(out.findings).toHaveLength(1);
+    const src = "\uFEFFimport x from 'openai';\n";
+    expect(out.findings[0].evidence.start).toBe(src.indexOf("'openai'"));
+  });
+
+  it('is unknown with no-evaluable-files when everything is excluded', async () => {
+    const out = await run({ 'node_modules/a/i.js': "require('openai');\n", 'dist/b.js': 'x' });
+    expect(out.state).toBe('unknown');
+    expect(out.notes).toEqual(['no-evaluable-files']);
+  });
+
+  it('excludes nested node_modules and matches extensions case-insensitively', async () => {
+    const out = await run({ 'pkg/node_modules/x.ts': "import a from 'openai';\n", 'A.TS': "import a from 'openai';\n" });
+    expect(out.findings.map((f) => f.evidence.path)).toEqual(['A.TS']);
+  });
+});
+
+describe('evaluate: non-ok snapshot entries never pass', () => {
+  it('reports a symlinked directory and a symlinked file as unknown', async () => {
+    const outside = await makeRepo({ 'x.ts': "import a from 'openai';\n" });
+    const dir = await makeRepo({ 'ok.ts': 'export const a = 1;\n' });
+    await symlink(outside, path.join(dir, 'src'));
+    await symlink(path.join(outside, 'x.ts'), path.join(dir, 'l.ts'));
+    const out = await runDir(dir);
+    expect(out.state).toBe('unknown');
+    expect(out.unknownFiles).toEqual([
+      { path: 'l.ts', reason: 'symlink' },
+      { path: 'src', reason: 'symlink' },
+    ]);
+  });
+
+  it('reports over-cap files as unknown, with or without an extension', async () => {
+    const dir = await makeRepo({ 'big.ts': 'x'.repeat(50), 'Makefile': 'y'.repeat(50), 'ok.ts': '1' });
+    const out = await runDir(dir, 10);
+    expect(out.state).toBe('unknown');
+    expect(out.unknownFiles).toEqual([
+      { path: 'Makefile', reason: 'too-large' },
+      { path: 'big.ts', reason: 'too-large' },
+    ]);
+  });
+
+  it('reports an unreadable source file as unknown', async (ctx) => {
+    if (process.getuid?.() === 0) return ctx.skip();
+    const dir = await makeRepo({ 'a.ts': "import a from 'openai';\n", 'b.ts': '1' });
+    await chmod(path.join(dir, 'a.ts'), 0o000);
+    const out = await runDir(dir);
+    await chmod(path.join(dir, 'a.ts'), 0o644);
+    expect(out.state).toBe('unknown');
+    expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
+  });
+
+  it('reports a binary source file as unknown but ignores a binary image', async () => {
+    const out = await run({ 'a.ts': 'abc\u0000def', 'img.png': 'abc\u0000def', 'ok.ts': '1' });
+    expect(out.state).toBe('unknown');
+    expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
+  });
+});
+
+describe('evaluate: embedding and unlisted source formats', () => {
+  const exts = 'vue svelte astro mdx html htm ipynb c cc cpp h hpp scala dart ex exs sh bash zsh lua pl r jl clj m mm'.split(' ');
+  for (const ext of exts) {
+    it(`reports .${ext} as unsupported-language`, async () => {
+      const out = await run({ [`f.${ext}`]: 'x', 'ok.ts': '1' });
+      expect(out.unknownFiles).toEqual([{ path: `f.${ext}`, reason: 'unsupported-language' }]);
+      expect(out.state).toBe('unknown');
+    });
+  }
+
+  it('reports an uppercase unsupported extension', async () => {
+    expect((await run({ 'F.VUE': 'x', 'ok.ts': '1' })).unknownFiles).toHaveLength(1);
+  });
+
+  it('reports an extensionless shebang script and ignores one without', async () => {
+    const hit = await run({ deploy: '#!/usr/bin/env node\nrequire("openai")\n', 'ok.ts': '1' });
+    expect(hit.unknownFiles).toEqual([{ path: 'deploy', reason: 'unsupported-language' }]);
+    const miss = await run({ LICENSE: 'MIT\n', 'ok.ts': '1' });
+    expect(miss.unknownFiles).toEqual([]);
+    expect(miss.state).toBe('pass');
+  });
+
+  it('ignores md, json, yaml, env, css and images', async () => {
+    const out = await run({ 'a.md': 'x', 'b.json': '{}', 'c.yaml': 'a: 1', '.env': 'A=1', 'd.css': 'a{}', 'e.png': 'x', 'ok.ts': '1' });
+    expect(out.state).toBe('pass');
+    expect(out.unknownFiles).toEqual([]);
+  });
+});
+
+describe('evaluate: template literals with substitutions', () => {
+  it('flags a provider URL or gateway prefix in the template head', async () => {
+    expect((await run({ 'a.ts': 'fetch(`https://api.openai.com/v1/${p}`);\n' })).state).toBe('fail');
+    expect((await run({ 'a.ts': 'gateway(`openai/${m}`);\n' })).state).toBe('fail');
+  });
+
+  it('does not flag heads that do not fix the host or prefix', async () => {
+    expect((await run({ 'a.ts': 'fetch(`https://${host}/v1`);\n' })).state).toBe('pass');
+    expect((await run({ 'a.ts': 'gateway(`openai${x}`);\n' })).state).toBe('pass');
+    expect((await run({ 'a.ts': 'fetch(`https://api.openai.com${x}`);\n' })).state).toBe('pass');
+    expect((await run({ 'a.ts': 'fetch(`https://example.com/${x}`);\n' })).state).toBe('pass');
+  });
+});
+
+describe('evaluate: evidence line and excerpt', () => {
+  it('keeps line and excerpt consistent when an earlier literal holds U+2028', async () => {
+    const src = "const s = 'a\u2028b';\nimport o from 'openai';\n";
+    const f = (await run({ 'a.ts': src })).findings[0];
+    expect(f.evidence.excerpt).toBe("import o from 'openai';");
+    expect(f.evidence.line).toBe(3);
   });
 });

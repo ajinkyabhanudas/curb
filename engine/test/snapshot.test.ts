@@ -1,4 +1,4 @@
-import { stat, symlink } from 'node:fs/promises';
+import { stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,6 +35,24 @@ describe('takeSnapshot', () => {
     expect(snap.files.find((f) => f.path === 'link')?.status).toBe('symlink');
     expect(snap.files.find((f) => f.path === 'file-link.ts')?.status).toBe('symlink');
     expect(snap.files.some((f) => f.content?.includes('TOP SECRET'))).toBe(false);
+  });
+
+  it('changes the tree hash when a symlink is retargeted', async () => {
+    const dir = await makeRepo({ 'ok.ts': '1' });
+    await symlink('/tmp/one', path.join(dir, 'link'));
+    const before = await takeSnapshot(dir);
+    await unlink(path.join(dir, 'link'));
+    await symlink('/tmp/two', path.join(dir, 'link'));
+    const after = await takeSnapshot(dir);
+    expect(after.treeHash).not.toBe(before.treeHash);
+  });
+
+  it('changes the tree hash when an over-cap file grows', async () => {
+    const dir = await makeRepo({ 'big.ts': 'x'.repeat(2000) });
+    const before = await takeSnapshot(dir, { maxFileBytes: 1000 });
+    await writeFile(path.join(dir, 'big.ts'), 'x'.repeat(3000));
+    const after = await takeSnapshot(dir, { maxFileBytes: 1000 });
+    expect(after.treeHash).not.toBe(before.treeHash);
   });
 
   it('marks oversized files without reading them', async () => {

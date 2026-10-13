@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, stat } from 'node:fs/promises';
+import { lstat, readdir, readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { canonicalize } from '../schema/canonical.ts';
 import { sha256 } from '../schema/hash.ts';
@@ -45,7 +45,7 @@ export async function takeSnapshot(root: string, options: SnapshotOptions = {}):
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
       const abs = path.join(dir, entry.name);
       if (entry.isSymbolicLink()) {
-        files.push({ path: relPath, status: 'symlink', sha256: null, size: 0, content: null });
+        files.push(await readLink(abs, relPath));
       } else if (entry.isDirectory()) {
         if (skip.has(entry.name)) skippedDirs.push(relPath);
         else await walk(abs, relPath);
@@ -71,7 +71,8 @@ async function readEntry(abs: string, relPath: string, maxBytes: number): Promis
   try {
     const info = await lstat(abs);
     if (info.size > maxBytes) {
-      return { path: relPath, status: 'too-large', sha256: null, size: 0, content: null };
+      // Raw byte size: the file is never read, so this is the one size that is not normalized-text size.
+      return { path: relPath, status: 'too-large', sha256: null, size: info.size, content: null };
     }
     const raw = await readFile(abs);
     if (raw.subarray(0, 8192).includes(0)) {
@@ -79,6 +80,16 @@ async function readEntry(abs: string, relPath: string, maxBytes: number): Promis
     }
     const content = raw.toString('utf8').replace(/\r\n?/g, '\n');
     return { path: relPath, status: 'ok', sha256: sha256(content), size: Buffer.byteLength(content), content };
+  } catch {
+    return { path: relPath, status: 'unreadable', sha256: null, size: 0, content: null };
+  }
+}
+
+// Records the link text (not the target's content) so retargeting a link changes the tree hash.
+async function readLink(abs: string, relPath: string): Promise<SnapshotFile> {
+  try {
+    const target = await readlink(abs);
+    return { path: relPath, status: 'symlink', sha256: sha256(target), size: 0, content: null };
   } catch {
     return { path: relPath, status: 'unreadable', sha256: null, size: 0, content: null };
   }

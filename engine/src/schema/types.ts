@@ -29,6 +29,7 @@ export type UnknownReason =
   | 'generated'
   | 'unsupported-language'
   | 'too-large'
+  | 'symlink'
   | 'unreadable';
 
 export interface UnknownFile {

@@ -10,7 +10,13 @@ import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 export const EVALUATOR_VERSION = '0.1.0';
 
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts']);
-const OTHER_LANG_EXT = new Set(['.py', '.go', '.rs', '.java', '.rb', '.php', '.cs', '.kt', '.swift']);
+const OTHER_LANG_EXT = new Set([
+  '.py', '.go', '.rs', '.java', '.rb', '.php', '.cs', '.kt', '.swift',
+  // formats that embed JS/TS, and other languages that may call a provider
+  '.vue', '.svelte', '.astro', '.mdx', '.html', '.htm', '.ipynb',
+  '.c', '.cc', '.cpp', '.h', '.hpp', '.scala', '.dart', '.ex', '.exs',
+  '.sh', '.bash', '.zsh', '.lua', '.pl', '.r', '.jl', '.clj', '.m', '.mm',
+]);
 const MAX_LINE_LENGTH = 1000;
 
 export interface EvaluationInput {
@@ -39,6 +45,15 @@ export function evaluate({ snapshot, card, allowlist }: EvaluationInput): Evalua
   for (const file of snapshot.files) {
     if (isExcluded(file.path, card)) continue;
     const ext = path.posix.extname(file.path).toLowerCase();
+    const nonOk = nonOkReason(file, ext);
+    if (nonOk) {
+      unknownFiles.push({ path: file.path, reason: nonOk });
+      continue;
+    }
+    if (ext === '' && file.content?.startsWith('#!')) {
+      unknownFiles.push({ path: file.path, reason: 'unsupported-language' });
+      continue;
+    }
     if (OTHER_LANG_EXT.has(ext)) {
       unknownFiles.push({ path: file.path, reason: 'unsupported-language' });
       continue;
@@ -79,8 +94,17 @@ function isExcluded(filePath: string, card: PolicyCard): boolean {
   return card.exclusions.files.includes(base) || segments.slice(0, -1).some((s) => card.exclusions.dirs.includes(s));
 }
 
-function fileProblem(file: SnapshotFile): UnknownReason | undefined {
+// Entries the snapshot could not read as text are unknown whatever their extension; a symlink
+// or oversized file can hide source. Binaries only matter when they carry a source extension.
+function nonOkReason(file: SnapshotFile, ext: string): UnknownReason | undefined {
+  if (file.status === 'ok') return undefined;
+  if (file.status === 'symlink') return 'symlink';
   if (file.status === 'too-large') return 'too-large';
+  if (file.status === 'binary') return SOURCE_EXT.has(ext) || OTHER_LANG_EXT.has(ext) ? 'unreadable' : undefined;
+  return 'unreadable';
+}
+
+function fileProblem(file: SnapshotFile): UnknownReason | undefined {
   if (file.status !== 'ok' || file.content === null || file.sha256 === null) return 'unreadable';
   if (looksMinified(file.path, file.content)) return 'minified';
   if (looksGenerated(file.content)) return 'generated';
@@ -122,7 +146,7 @@ function calleeName(node: ts.Expression): string | undefined {
 
 function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {
   const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.ESNext, true);
-  const lines = content.split('\n');
+  const lineStarts = sf.getLineStarts();
   const out: Finding[] = [];
 
   function packageProvider(spec: string): string | undefined {
@@ -146,20 +170,20 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
     return slash > 0 ? own(card.registry.gatewayPrefixes, text.slice(0, slash)) : undefined;
   }
 
-  function check(node: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral, providerId: string | undefined, what: string) {
+  function check(node: ts.Node, text: string, providerId: string | undefined, what: string) {
     if (!providerId || allowlist.includes(providerId)) return;
     const start = node.getStart(sf);
     const end = node.getEnd();
     const { line, character } = sf.getLineAndCharacterOfPosition(start);
     out.push({
       id: sha256(
-        canonicalize({ ruleId: card.id, ruleVersion: card.version, path: filePath, start, end, matched: node.text }),
+        canonicalize({ ruleId: card.id, ruleVersion: card.version, path: filePath, start, end, matched: text }),
       ),
       ruleId: card.id,
       ruleVersion: card.version,
       severity: card.severity,
       providerId,
-      matched: node.text,
+      matched: text,
       evidence: {
         path: filePath,
         fileSha256: fileSha,
@@ -167,8 +191,8 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
         end,
         line: line + 1,
         column: character + 1,
-        excerpt: (lines[line] ?? '').trim().slice(0, 160),
-        reason: `${what} "${node.text}" resolves to provider "${providerId}", which is not in the allowlist`,
+        excerpt: content.slice(lineStarts[line], lineStarts[line + 1] ?? content.length).trim().slice(0, 160),
+        reason: `${what} "${text}" resolves to provider "${providerId}", which is not in the allowlist`,
       },
     });
   }
@@ -178,23 +202,27 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
 
   function visit(node: ts.Node): void {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && isLiteral(node.moduleSpecifier)) {
-      check(node.moduleSpecifier, packageProvider(node.moduleSpecifier.text), 'import of package');
+      check(node.moduleSpecifier, node.moduleSpecifier.text, packageProvider(node.moduleSpecifier.text), 'import of package');
     } else if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const arg = node.arguments[0];
-      if (isLiteral(arg)) {
-        const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
-        if (isRequire || callee.kind === ts.SyntaxKind.ImportKeyword) {
-          check(arg, packageProvider(arg.text), 'load of package');
-        } else if (card.modelConstructors.includes(calleeName(callee) ?? '')) {
-          check(arg, gatewayProvider(arg.text), 'model identifier');
-        }
+      const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
+      if (isLiteral(arg) && (isRequire || callee.kind === ts.SyntaxKind.ImportKeyword)) {
+        check(arg, arg.text, packageProvider(arg.text), 'load of package');
+      } else if (card.modelConstructors.includes(calleeName(callee) ?? '')) {
+        // Only the template head is known; a prefix must be fully inside it (`openai/${m}`).
+        const text = isLiteral(arg) ? arg.text : arg && ts.isTemplateExpression(arg) ? arg.head.text : undefined;
+        if (text !== undefined && arg) check(arg, text, gatewayProvider(text), 'model identifier');
       }
     }
     if (ts.isExternalModuleReference(node) && isLiteral(node.expression)) {
-      check(node.expression, packageProvider(node.expression.text), 'import of package');
+      check(node.expression, node.expression.text, packageProvider(node.expression.text), 'import of package');
     }
-    if (isLiteral(node)) check(node, hostProvider(node.text), 'URL');
+    if (isLiteral(node)) check(node, node.text, hostProvider(node.text), 'URL');
+    // A template URL counts only when the head fixes the whole host (`https://api.openai.com/${x}`).
+    else if (ts.isTemplateExpression(node) && /^https?:\/\/[^/]+\//i.test(node.head.text)) {
+      check(node, node.head.text, hostProvider(node.head.text), 'URL');
+    }
     ts.forEachChild(node, visit);
   }
 

@@ -15,7 +15,8 @@
   ],
   "prerequisites": [
     "Source is TypeScript or JavaScript",
-    "Files are readable, under the size cap and not minified or generated"
+    "Files are readable, under the size cap and not minified or generated",
+    "Only the listed TypeScript and JavaScript extensions are analyzed; files in the unsupported-language list yield unknown"
   ],
   "falsePositiveExamples": [
     "A provider import in a test-only file that never ships",
@@ -26,7 +27,13 @@
     "Dynamic specifiers such as require(name) or template literals with substitutions",
     "Model identifiers held in variables or environment files",
     "A proxy or wrapper module that hides the real provider",
-    "Configuration and environment files are not scanned in V1"
+    "Configuration and environment files are not scanned in V1",
+    "URLs assembled by string concatenation, split new URL(...) arguments, or template literals whose provider host is not in the literal head",
+    "Hosts written without a scheme (api.openai.com) or as a subdomain of a registered host",
+    "Model identifiers passed anywhere other than the first string-literal argument of a declared constructor, for example generateText({ model: 'openai/gpt-5' })",
+    "Aliased constructors (const g = gateway), element access (gateway['languageModel']) and createGateway()('x')",
+    "Files whose extension is not TypeScript or JavaScript: the embedding formats reported unknown are covered, but .md, .json, .yaml and .env files are not scanned",
+    "Exclusion directories are matched by name at any depth, so a directory named like an exclusion is skipped wherever it sits"
   ],
   "evidenceBoundaries": [
     "Findings show where source references a provider, not where traffic goes at runtime"
