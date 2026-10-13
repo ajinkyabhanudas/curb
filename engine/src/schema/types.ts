@@ -4,6 +4,7 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export interface Evidence {
   path: string;
   fileSha256: string;
+  // UTF-16 code unit offsets into the line-ending-normalized file text
   start: number;
   end: number;
   line: number;
