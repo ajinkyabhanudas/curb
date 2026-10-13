@@ -1,0 +1,22 @@
+[
+  {
+    "name": "AI Addendum",
+    "description": "Common Paper standard addendum governing a provider's AI Services: use of input and output, usage restrictions, model training and non-training improvement, intellectual property and privacy, and disclaimers.",
+    "filename": "AI-Addendum.md"
+  },
+  {
+    "name": "Data Processing Agreement",
+    "description": "Common Paper standard DPA covering processor and subprocessor relationships, processing of personal data, restricted transfers, security incident response, audits, deletion of customer personal data, and limitation of liability.",
+    "filename": "DPA.md"
+  },
+  {
+    "name": "Cloud Service Agreement",
+    "description": "Common Paper standard terms for a cloud service subscription: service access, restrictions and obligations, privacy and security, payment, term and termination, warranties, liability, indemnification, and confidentiality.",
+    "filename": "CSA.md"
+  },
+  {
+    "name": "Service Level Agreement",
+    "description": "Common Paper standard SLA for a cloud service: target uptime and its calculation, target response time, and remedies for missed targets.",
+    "filename": "sla.md"
+  }
+]
