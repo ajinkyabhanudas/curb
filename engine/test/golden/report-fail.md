@@ -16,13 +16,13 @@ This report checks configured engineering evidence against one human-confirmed c
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v1.0.0. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.0.0`. Files evaluated: 2.
 
 ## Confirmed obligation
 
 - Quote: `Provider will route Customer Content for model inference only to the following model providers: Anthropic.`
-- Approved by: `Test Reviewer` at 2026-10-13T09:00:00.000Z
-- Applicability: applies
+- Approved by: `Test Reviewer` at `2026-10-13T09:00:00.000Z`
+- Applicability: `applies`
 - Provider allowlist: `anthropic`
 
 ## Findings
@@ -51,11 +51,11 @@ None.
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
 - Obligation id: `6dd1e295a6eb82d905b226ffb567eb6ced72259de89f42a877c42d8d1fbc520e`
 - Policy card hash: `a76c2d5aa5f0aa43ad7f0d36fe6237d498f2a46475a3dd7d7ef1264582b9e8d9`
-- Evaluator version: 0.1.0
+- Evaluator version: `0.1.0`
 
 ## Run
 
-- Started: 2026-10-13T09:00:00.000Z
-- Finished: 2026-10-13T09:00:00.000Z
+- Started: `2026-10-13T09:00:00.000Z`
+- Finished: `2026-10-13T09:00:00.000Z`
 - Operator: `test-reviewer`
 - Tenant: `demo`

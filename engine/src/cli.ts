@@ -8,7 +8,7 @@ import { loadCard } from './policy/card.ts';
 import { parseObligation, type Applicability } from './obligation/obligation.ts';
 import { FsAuditLog, FsBlobStore } from './store/fs.ts';
 import { renderMarkdown } from './report/markdown.ts';
-import type { ResultFile, ResultState } from './schema/types.ts';
+import { parseResultFile, verifyResultIntegrity } from './schema/result.ts';
 import { safeText } from './terminal.ts';
 import { confirmAndRecord, exitCodeFor, recordRefusal, scanAndRecord, type Deps } from './workflow.ts';
 
@@ -167,18 +167,6 @@ async function scan(args: string[]): Promise<number> {
   return exitCodeFor(body.state);
 }
 
-const STATES: ResultState[] = ['pass', 'fail', 'unknown', 'not-applicable', 'error'];
-
-function parseResultFile(raw: unknown): ResultFile {
-  const bad = (why: string) => new Error(`--result file is not a valid result: ${why}`);
-  const o = raw as { body?: { state?: unknown; findings?: unknown }; envelope?: unknown } | null;
-  if (typeof o !== 'object' || o === null || typeof o.body !== 'object' || o.body === null) throw bad('missing body');
-  if (!STATES.includes(o.body.state as ResultState)) throw bad('body.state is not one of ' + STATES.join(', '));
-  if (!Array.isArray(o.body.findings)) throw bad('body.findings is not an array');
-  if (typeof o.envelope !== 'object' || o.envelope === null) throw bad('missing envelope');
-  return o as ResultFile;
-}
-
 async function report(args: string[]): Promise<void> {
   const { values } = parseArgs({
     args,
@@ -190,6 +178,7 @@ async function report(args: string[]): Promise<void> {
   if (values.format !== 'md' && values.format !== 'json') throw new Error(`--format must be md or json, got "${values.format}"`);
   await checkOut(values.out, values.force);
   const file = parseResultFile(JSON.parse(await readFile(need(values, 'result'), 'utf8')));
+  verifyResultIntegrity(file);
   const { card, hash } = await loadCard(need(values, 'card'));
   const agreement = ingestAgreement(await readFile(need(values, 'agreement')));
   const obligation = parseObligation(JSON.parse(await readFile(need(values, 'obligation'), 'utf8')), agreement, card);

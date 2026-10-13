@@ -18,9 +18,17 @@ const MEANING: Record<ResultState, string> = {
   'not-applicable': 'A named human recorded that this commitment does not apply. No scan verdict was produced.',
 };
 
+const MAX_CELL = 300;
+
 /** Escape untrusted text for use inside a Markdown table cell, as a single code span on one line. */
 export function cell(text: string): string {
-  const flat = safeText(text).replace(/`/g, "'").replace(/\|/g, '\\u007c');
+  if (text.trim() === '') return '`(empty)`';
+  let flat = safeText(text).replace(/`/g, "'").replace(/\|/g, '\\u007c');
+  if (flat.length > MAX_CELL) {
+    let cut = flat.slice(0, MAX_CELL);
+    if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1);
+    flat = `${cut}…[truncated]`;
+  }
   return `\`${flat}\``;
 }
 
@@ -28,6 +36,7 @@ export function renderMarkdown({ file, card, obligation }: ReportInput): string 
   const { body, envelope } = file;
   const out: string[] = [];
   out.push('# Curb control verification report', '');
+  // card.status and card.nonClaims come from the user's own trusted policy file, so safeText (terminal-safety only) is enough.
   out.push(`> Policy card status: **${safeText(card.status)}**`, '');
 
   out.push('## Scope and non-claims', '');
@@ -40,12 +49,12 @@ export function renderMarkdown({ file, card, obligation }: ReportInput): string 
 
   out.push('## Result', '');
   out.push(`**${body.state.toUpperCase()}**: ${MEANING[body.state]}`, '');
-  out.push(`Rule: ${cell(body.ruleId)} v${safeText(body.ruleVersion)}. Files evaluated: ${body.filesEvaluated}.`, '');
+  out.push(`Rule: ${cell(body.ruleId)} v${cell(body.ruleVersion)}. Files evaluated: ${Number(body.filesEvaluated)}.`, '');
 
   out.push('## Confirmed obligation', '');
   out.push(`- Quote: ${cell(obligation.quote)}`);
-  out.push(`- Approved by: ${cell(obligation.approver)} at ${safeText(obligation.approvedAt)}`);
-  out.push(`- Applicability: ${safeText(obligation.applicability)}`);
+  out.push(`- Approved by: ${cell(obligation.approver)} at ${cell(obligation.approvedAt)}`);
+  out.push(`- Applicability: ${cell(obligation.applicability)}`);
   out.push(`- Provider allowlist: ${obligation.allowlist.length ? obligation.allowlist.map(cell).join(', ') : 'none recorded'}`);
   if (obligation.exception) out.push(`- Exception: ${cell(obligation.exception)}`);
   out.push('');
@@ -64,7 +73,7 @@ export function renderMarkdown({ file, card, obligation }: ReportInput): string 
   out.push('## Unknown files and notes', '');
   if (body.unknownFiles.length === 0 && body.notes.length === 0) out.push('None.', '');
   else {
-    for (const u of body.unknownFiles) out.push(`- ${cell(u.path)}: ${safeText(u.reason)}`);
+    for (const u of body.unknownFiles) out.push(`- ${cell(u.path)}: ${cell(u.reason)}`);
     for (const n of body.notes) out.push(`- note: ${cell(n)}`);
     out.push('');
   }
@@ -79,11 +88,11 @@ export function renderMarkdown({ file, card, obligation }: ReportInput): string 
   out.push(`- Agreement text hash: ${cell(body.agreementHash)}`);
   out.push(`- Obligation id: ${cell(body.obligationHash)}`);
   out.push(`- Policy card hash: ${cell(body.policyCardHash)}`);
-  out.push(`- Evaluator version: ${safeText(body.evaluatorVersion)}`, '');
+  out.push(`- Evaluator version: ${cell(body.evaluatorVersion)}`, '');
 
   out.push('## Run', '');
-  out.push(`- Started: ${safeText(envelope.startedAt)}`);
-  out.push(`- Finished: ${safeText(envelope.finishedAt)}`);
+  out.push(`- Started: ${cell(envelope.startedAt)}`);
+  out.push(`- Finished: ${cell(envelope.finishedAt)}`);
   out.push(`- Operator: ${cell(envelope.operator)}`);
   out.push(`- Tenant: ${cell(envelope.tenantId)}`, '');
   return out.join('\n');
