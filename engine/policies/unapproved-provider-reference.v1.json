@@ -1,0 +1,74 @@
+{
+  "id": "unapproved-provider-reference",
+  "version": "1.0.0",
+  "status": "draft, pending counsel approval",
+  "owner": "unassigned (to be named by the product owner)",
+  "reviewDate": "2026-10-13",
+  "severity": "high",
+  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal or gateway model identifier in scanned source that resolves to a registered provider outside the customer's allowlist is a finding.",
+  "approvedTextPatterns": [
+    "Provider will route Customer Content for model inference only to the following model providers: <list>."
+  ],
+  "requiredFacts": [
+    "The customer allowlist, as normalized provider IDs from the registry",
+    "A human-confirmed obligation citing the exact agreement text"
+  ],
+  "prerequisites": [
+    "Source is TypeScript or JavaScript",
+    "Files are readable, under the size cap and not minified or generated"
+  ],
+  "falsePositiveExamples": [
+    "A provider import in a test-only file that never ships",
+    "A provider referenced in code that is never executed"
+  ],
+  "falseNegativeRisks": [
+    "A provider that is not in the registry is not flagged",
+    "Dynamic specifiers such as require(name) or template literals with substitutions",
+    "Model identifiers held in variables or environment files",
+    "A proxy or wrapper module that hides the real provider",
+    "Configuration and environment files are not scanned in V1"
+  ],
+  "evidenceBoundaries": [
+    "Findings show where source references a provider, not where traffic goes at runtime"
+  ],
+  "nonClaims": [
+    "Does not establish which provider receives data at runtime",
+    "Does not establish provider conduct, retention or training use",
+    "Does not detect dead code or proxy rerouting",
+    "Does not establish that the allowlist matches the signed agreement; a named human confirms that",
+    "Is not legal advice or a compliance certification"
+  ],
+  "exclusions": {
+    "dirs": ["node_modules", ".next", "dist"],
+    "files": ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
+  },
+  "registry": {
+    "packages": {
+      "openai": "openai",
+      "@ai-sdk/openai": "openai",
+      "@anthropic-ai/sdk": "anthropic",
+      "@ai-sdk/anthropic": "anthropic",
+      "@ai-sdk/google": "google",
+      "@google/generative-ai": "google",
+      "@ai-sdk/xai": "xai",
+      "@ai-sdk/mistral": "mistral",
+      "@mistralai/mistralai": "mistral"
+    },
+    "hosts": {
+      "api.openai.com": "openai",
+      "api.anthropic.com": "anthropic",
+      "generativelanguage.googleapis.com": "google",
+      "api.x.ai": "xai",
+      "api.mistral.ai": "mistral"
+    },
+    "gatewayPrefixes": {
+      "openai": "openai",
+      "anthropic": "anthropic",
+      "google": "google",
+      "xai": "xai",
+      "mistral": "mistral"
+    }
+  },
+  "modelConstructors": ["gateway", "gateway.languageModel"],
+  "testCases": ["engine/test/evaluator.test.ts", "engine/test/loop.test.ts"]
+}
