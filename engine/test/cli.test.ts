@@ -178,6 +178,23 @@ describe('curb CLI terminal safety and store placement', () => {
     }
     expect(await exists(path.join(repo, '.curb'))).toBe(false);
   });
+
+  it('allows a store whose name merely starts with two dots', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'curb-cli-'));
+    const ob = await confirmTo(dir, ['--allow', 'anthropic']);
+    const repo = await makeRepo({ 'a.ts': 'export {};\n' });
+    const store = path.join(path.dirname(repo), `..store-${path.basename(repo)}`);
+    await cli(['scan', '--repo', repo, '--card', CARD_PATH, '--agreement', AGREEMENT_PATH, '--obligation', ob, '--store', store]);
+  });
+
+  it('refuses a store named ..foo inside the repo', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'curb-cli-'));
+    const ob = await confirmTo(dir, ['--allow', 'anthropic']);
+    const repo = await makeRepo({ 'a.ts': 'export {};\n' });
+    await expect(
+      cli(['scan', '--repo', repo, '--card', CARD_PATH, '--agreement', AGREEMENT_PATH, '--obligation', ob, '--store', path.join(repo, '..foo')]),
+    ).rejects.toMatchObject({ code: 2, stderr: expect.stringMatching(/--store.*outside the repo/) });
+  });
 });
 
 describe('curb CLI --out, --force and --start', () => {

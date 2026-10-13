@@ -7,6 +7,8 @@ import { ingestAgreement } from './agreement/ingest.ts';
 import { loadCard } from './policy/card.ts';
 import { parseObligation, type Applicability } from './obligation/obligation.ts';
 import { FsAuditLog, FsBlobStore } from './store/fs.ts';
+import { renderMarkdown } from './report/markdown.ts';
+import type { ResultFile, ResultState } from './schema/types.ts';
 import { safeText } from './terminal.ts';
 import { confirmAndRecord, exitCodeFor, recordRefusal, scanAndRecord, type Deps } from './workflow.ts';
 
@@ -72,7 +74,7 @@ async function assertStoreOutsideRepo(store: string, repo: string): Promise<void
   const s = await resolveReal(store);
   const r = await resolveReal(repo);
   const rel = path.relative(r, s);
-  if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
+  if (rel === '' || (!(rel === '..' || rel.startsWith(`..${path.sep}`)) && !path.isAbsolute(rel))) {
     throw new Error(`--store (${store}) is inside the scanned repo (${repo}); pass --store outside the repo`);
   }
 }
@@ -165,7 +167,50 @@ async function scan(args: string[]): Promise<number> {
   return exitCodeFor(body.state);
 }
 
-const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan };
+const STATES: ResultState[] = ['pass', 'fail', 'unknown', 'not-applicable', 'error'];
+
+function parseResultFile(raw: unknown): ResultFile {
+  const bad = (why: string) => new Error(`--result file is not a valid result: ${why}`);
+  const o = raw as { body?: { state?: unknown; findings?: unknown }; envelope?: unknown } | null;
+  if (typeof o !== 'object' || o === null || typeof o.body !== 'object' || o.body === null) throw bad('missing body');
+  if (!STATES.includes(o.body.state as ResultState)) throw bad('body.state is not one of ' + STATES.join(', '));
+  if (!Array.isArray(o.body.findings)) throw bad('body.findings is not an array');
+  if (typeof o.envelope !== 'object' || o.envelope === null) throw bad('missing envelope');
+  return o as ResultFile;
+}
+
+async function report(args: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args,
+    options: {
+      result: { type: 'string' }, card: { type: 'string' }, agreement: { type: 'string' }, obligation: { type: 'string' },
+      format: { type: 'string', default: 'md' }, out: { type: 'string' }, force: { type: 'boolean' },
+    },
+  });
+  if (values.format !== 'md' && values.format !== 'json') throw new Error(`--format must be md or json, got "${values.format}"`);
+  await checkOut(values.out, values.force);
+  const file = parseResultFile(JSON.parse(await readFile(need(values, 'result'), 'utf8')));
+  const { card, hash } = await loadCard(need(values, 'card'));
+  const agreement = ingestAgreement(await readFile(need(values, 'agreement')));
+  const obligation = parseObligation(JSON.parse(await readFile(need(values, 'obligation'), 'utf8')), agreement, card);
+  const expected: Record<string, string> = {
+    obligationHash: obligation.id,
+    agreementHash: agreement.textSha256,
+    ruleId: card.id,
+    ruleVersion: card.version,
+    policyCardHash: hash,
+  };
+  for (const [field, want] of Object.entries(expected)) {
+    const got = (file.body as unknown as Record<string, unknown>)[field];
+    if (got !== want) {
+      throw new Error(`result ${field} (${safeText(String(got))}) does not match the supplied inputs (${want}); refusing to report`);
+    }
+  }
+  const text = values.format === 'json' ? `${JSON.stringify(file, null, 2)}\n` : renderMarkdown({ file, card, obligation });
+  await output(text, values.out, values.force);
+}
+
+const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan, report };
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
