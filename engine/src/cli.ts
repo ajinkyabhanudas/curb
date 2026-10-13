@@ -7,6 +7,7 @@ import { ingestAgreement } from './agreement/ingest.ts';
 import { loadCard } from './policy/card.ts';
 import { parseObligation, type Applicability } from './obligation/obligation.ts';
 import { FsAuditLog, FsBlobStore } from './store/fs.ts';
+import { diffResults, renderDeltaMarkdown } from './report/delta.ts';
 import { renderMarkdown } from './report/markdown.ts';
 import { parseResultFile, verifyResultIntegrity } from './schema/result.ts';
 import { safeText } from './terminal.ts';
@@ -199,7 +200,23 @@ async function report(args: string[]): Promise<void> {
   await output(text, values.out, values.force);
 }
 
-const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan, report };
+async function diff(args: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args,
+    options: { before: { type: 'string' }, after: { type: 'string' }, out: { type: 'string' }, force: { type: 'boolean' } },
+  });
+  await checkOut(values.out, values.force);
+  const read = async (name: string) => {
+    const file = parseResultFile(JSON.parse(await readFile(need(values, name), 'utf8')));
+    verifyResultIntegrity(file);
+    return file.body;
+  };
+  const before = await read('before');
+  const after = await read('after');
+  await output(`${renderDeltaMarkdown(diffResults(before, after))}\n`, values.out, values.force);
+}
+
+const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan, report, diff };
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
