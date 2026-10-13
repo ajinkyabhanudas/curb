@@ -9,6 +9,7 @@ import {
 import type { PolicyCard } from './policy/card.ts';
 import type { ResultFile, ResultState } from './schema/types.ts';
 import type { evaluate } from './evaluator/evaluate.ts';
+import { sha256 } from './schema/hash.ts';
 import { runScan } from './scan.ts';
 import type { AuditLog, BlobStore, TenantContext } from './store/types.ts';
 
@@ -16,7 +17,7 @@ export interface Deps {
   ctx: TenantContext;
   blobs: BlobStore;
   audit: AuditLog;
-  now?: () => Date;
+  now?: () => Date; // test-only seam: a fixed clock for reproducible envelopes
 }
 
 export interface ConfirmFields {
@@ -93,7 +94,7 @@ export function exitCodeFor(state: ResultState): number {
 export async function scanAndRecord(
   deps: Deps,
   a: { repoPath: string; agreementRaw: Uint8Array; card: PolicyCard; cardHash: string; obligation: Obligation },
-  evaluateFn?: typeof evaluate,
+  evaluateFn?: typeof evaluate, // test-only seam: lets tests inject an evaluator failure
 ): Promise<ResultFile & { diagnostics: string[] }> {
   const now = deps.now ?? (() => new Date());
   const startedAt = now().toISOString();
@@ -125,7 +126,10 @@ export async function scanAndRecord(
     },
   };
   try {
-    await deps.blobs.put(deps.ctx, JSON.stringify(file, null, 2));
+    const stored = JSON.stringify(file, null, 2);
+    const sha = await deps.blobs.put(deps.ctx, stored);
+    const back = await deps.blobs.get(deps.ctx, sha);
+    if (back === null || sha256(back) !== sha) throw new Error('stored result blob did not read back intact');
     await deps.audit.append(deps.ctx, 'scan.completed', {
       resultHash: file.envelope.resultHash,
       state: file.body.state,

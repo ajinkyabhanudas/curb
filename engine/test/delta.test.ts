@@ -1,16 +1,14 @@
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { diffResults, renderDeltaMarkdown } from '../src/report/delta.ts';
-import type { ResultFile } from '../src/schema/types.ts';
+import type { ResultBody } from '../src/schema/types.ts';
 import { scanAndRecord } from '../src/workflow.ts';
-import { AGREEMENT_PATH, CARD_PATH, QUOTE, ROOT, confirmFixture, fixtureDeps, scanFixture } from './helpers.ts';
+import { ROOT, cli, cliSetup, confirmFixture, fixtureDeps, forge, readResult, scanFixture } from './helpers.ts';
 
-const GOLDENS = ['delta-fixed.md', 'delta-unknown.md'].map((f) => path.join(ROOT, 'test/golden', f));
+const GOLDENS = ['delta-fixed.md', 'delta-unknown.md', 'delta-regression.md'].map((f) => path.join(ROOT, 'test/golden', f));
 // Evaluated at import time, before any snapshot can be written, so a deleted golden fails instead of regenerating.
 const GOLDEN_EXISTED = GOLDENS.map((g) => existsSync(g));
 
@@ -25,20 +23,26 @@ async function setup() {
   const confirmed = await confirmFixture(deps);
   return { deps, confirmed };
 }
+type Setup = Awaited<ReturnType<typeof setup>>;
 
-/** Scan a temp copy of the fixed fixture that also holds a minified file, so the rule cannot analyse it. */
-async function scanFixedWithMinified(s: Awaited<ReturnType<typeof setup>>) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'curb-unk-'));
-  await cp(path.join(ROOT, 'fixtures/repos/fixed'), dir, { recursive: true });
-  await writeFile(path.join(dir, 'vendor.min.js'), 'var a=1;\n');
-  return scanAndRecord(s.deps, {
-    repoPath: dir,
-    agreementRaw: s.confirmed.agreementRaw,
-    card: s.confirmed.card,
-    cardHash: s.confirmed.cardHash,
-    obligation: s.confirmed.obligation,
-  });
+async function scanDir(s: Setup, repoPath: string, evaluateFn?: Parameters<typeof scanAndRecord>[2]) {
+  return scanAndRecord(
+    s.deps,
+    { repoPath, agreementRaw: s.confirmed.agreementRaw, card: s.confirmed.card, cardHash: s.confirmed.cardHash, obligation: s.confirmed.obligation },
+    evaluateFn,
+  );
 }
+
+/** A temp copy of the fixed fixture plus the given extra files. */
+async function fixedPlus(extra: Record<string, string>): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'curb-var-'));
+  await cp(path.join(ROOT, 'fixtures/repos/fixed'), dir, { recursive: true });
+  for (const [rel, content] of Object.entries(extra)) await writeFile(path.join(dir, rel), content);
+  return dir;
+}
+
+const NEVER_PASS = /\bfixed\b|\bpass(ing|ed)?\b/;
+const scrub = (md: string) => md.replace(/not a pass/g, '').toLowerCase();
 
 describe('diffResults', () => {
   it('reports the single fixed finding between mutated and fixed', async () => {
@@ -72,12 +76,15 @@ describe('diffResults', () => {
     for (const k of ['ruleId', 'ruleVersion', 'policyCardHash', 'agreementHash', 'obligationHash'] as const) {
       expect(() => diffResults(a, { ...a, [k]: 'x' })).toThrow(new RegExp(`not comparable: ${k} differ`));
     }
+    expect(() => diffResults(a, { ...a, evaluatorVersion: '9.9.9' })).toThrow(
+      'results are not comparable: evaluatorVersion differ; re-run the earlier scan with the current evaluator',
+    );
   });
 
   it('never calls an unknown after-state fixed or passing when findings disappear', async () => {
     const s = await setup();
     const before = (await scanFixture(s.deps, s.confirmed, 'mutated')).body;
-    const afterFile = await scanFixedWithMinified(s);
+    const afterFile = await scanDir(s, await fixedPlus({ 'vendor.min.js': 'var a=1;\n' }));
     expect(afterFile.body.state).toBe('unknown');
     expect(afterFile.body.findings).toHaveLength(0);
     const d = diffResults(before, afterFile.body);
@@ -85,9 +92,77 @@ describe('diffResults', () => {
     const md = renderDeltaMarkdown(d);
     expect(md).toContain('no longer reported');
     expect(md).toContain('not a pass');
-    const stripped = md.replace(/not a pass/g, '').toLowerCase();
-    expect(stripped).not.toMatch(/\bfixed\b|\bpass(ing|ed)?\b/);
+    expect(scrub(md)).not.toMatch(NEVER_PASS);
     await expect(md).toMatchFileSnapshot('./golden/delta-unknown.md');
+  });
+
+  it('pass to fail reads as a regression', async () => {
+    const s = await setup();
+    const pass = (await scanFixture(s.deps, s.confirmed, 'fixed')).body;
+    const fail = (await scanFixture(s.deps, s.confirmed, 'mutated')).body;
+    const d = diffResults(pass, fail);
+    expect(d.added).toHaveLength(1);
+    const md = renderDeltaMarkdown(d);
+    expect(md).toContain('a previously passing result now has findings');
+    expect(md).not.toContain('## Fixed');
+    expect(md.toLowerCase()).not.toMatch(/\bfixed\b/);
+    await expect(md).toMatchFileSnapshot('./golden/delta-regression.md');
+  });
+
+  it('fail to fail says findings remain and which are new', async () => {
+    const s = await setup();
+    const before = (await scanFixture(s.deps, s.confirmed, 'mutated')).body;
+    // different finding: the old openai import is gone, a new one sits in another file
+    const after = (await scanDir(s, await fixedPlus({ 'extra.ts': "import { openai } from '@ai-sdk/openai';\n" }))).body;
+    expect(after.state).toBe('fail');
+    const d = diffResults(before, after);
+    expect(d.fixed).toHaveLength(1);
+    expect(d.added).toHaveLength(1);
+    const md = renderDeltaMarkdown(d);
+    expect(md).toContain('Some findings remain');
+    expect(md).toContain('1 new');
+    expect(md).not.toContain('## Fixed');
+    expect(md.toLowerCase()).not.toMatch(/\bfixed\b/);
+  });
+
+  it('fail to error never says fixed or passing', async () => {
+    const s = await setup();
+    const before = (await scanFixture(s.deps, s.confirmed, 'mutated')).body;
+    const after = (await scanDir(s, path.join(ROOT, 'fixtures/repos/fixed'), () => {
+      throw new Error('boom');
+    })).body;
+    expect(after.state).toBe('error');
+    const md = renderDeltaMarkdown(diffResults(before, after));
+    expect(md).toContain('not a verdict');
+    expect(scrub(md)).not.toMatch(NEVER_PASS);
+  });
+
+  it('pass to pass is stated plainly', async () => {
+    const s = await setup();
+    const a = (await scanFixture(s.deps, s.confirmed, 'fixed')).body;
+    const md = renderDeltaMarkdown(diffResults(a, a));
+    expect(md).toContain('Both results are PASS');
+    expect(md).toContain('does not establish compliance');
+  });
+
+  it('unknown to pass is stated plainly', async () => {
+    const s = await setup();
+    const unknown = (await scanDir(s, await fixedPlus({ 'vendor.min.js': 'var a=1;\n' }))).body;
+    const pass = (await scanFixture(s.deps, s.confirmed, 'fixed')).body;
+    const md = renderDeltaMarkdown(diffResults(unknown, pass));
+    expect(md).toContain('before result was UNKNOWN');
+    expect(md).toContain('does not establish compliance');
+  });
+
+  it('gives not-applicable its own sentence on either side', async () => {
+    const s = await setup();
+    const pass = (await scanFixture(s.deps, s.confirmed, 'fixed')).body;
+    const na: ResultBody = { ...pass, state: 'not-applicable', findings: [], unknownFiles: [], filesEvaluated: 0, notes: ['human-recorded-not-applicable'] };
+    const toNa = renderDeltaMarkdown(diffResults(pass, na));
+    expect(toNa).toContain('NOT-APPLICABLE: a named human recorded that this commitment does not apply');
+    expect(scrub(toNa)).not.toMatch(/\bfixed\b/);
+    const fromNa = renderDeltaMarkdown(diffResults(na, pass));
+    expect(fromNa).toContain('before result was NOT-APPLICABLE');
   });
 
   it('neutralises untrusted text in findings and unknown paths', async () => {
@@ -104,33 +179,18 @@ describe('diffResults', () => {
   });
 });
 
-const run = promisify(execFile);
-const cli = (args: string[]) => run('node', ['src/cli.ts', ...args], { cwd: ROOT });
-
-async function cliResults() {
-  const dir = await mkdtemp(path.join(tmpdir(), 'curb-diff-'));
-  const ob = path.join(dir, 'ob.json');
-  await cli([
-    'confirm', '--agreement', AGREEMENT_PATH, '--card', CARD_PATH, '--quote', QUOTE, '--allow', 'anthropic',
-    '--approver', 'Test Reviewer', '--at', '2026-10-13T09:00:00.000Z', '--store', dir, '--out', ob,
-  ]);
-  const scan = (repo: string, out: string) =>
-    cli([
-      'scan', '--repo', path.join(ROOT, 'fixtures/repos', repo), '--card', CARD_PATH, '--agreement', AGREEMENT_PATH,
-      '--obligation', ob, '--store', dir, '--out', out,
-    ]).catch((e: { code: number }) => {
-      if (e.code !== 1) throw e;
-    });
-  const before = path.join(dir, 'before.json');
-  const after = path.join(dir, 'after.json');
-  await scan('mutated', before);
-  await scan('fixed', after);
-  return { dir, before, after };
-}
-
 describe('curb diff CLI', () => {
+  async function pair() {
+    const c = await cliSetup();
+    const before = path.join(c.dir, 'before.json');
+    const after = path.join(c.dir, 'after.json');
+    await c.scan('mutated', before);
+    await c.scan('fixed', after);
+    return { ...c, before, after };
+  }
+
   it('prints the delta and writes --out, refusing to overwrite without --force', async () => {
-    const { dir, before, after } = await cliResults();
+    const { dir, before, after } = await pair();
     const { stdout } = await cli(['diff', '--before', before, '--after', after]);
     expect(stdout).toContain('**FAIL** to **PASS**');
     const out = path.join(dir, 'delta.md');
@@ -143,8 +203,8 @@ describe('curb diff CLI', () => {
   });
 
   it('refuses an edited or malformed result file', async () => {
-    const { dir, before, after } = await cliResults();
-    const f = JSON.parse(await readFile(before, 'utf8')) as ResultFile;
+    const { dir, before, after } = await pair();
+    const f = await readResult(before);
     f.body.state = 'pass';
     f.body.findings = [];
     const edited = path.join(dir, 'edited.json');
@@ -161,16 +221,32 @@ describe('curb diff CLI', () => {
   });
 
   it('refuses results from different control sets', async () => {
-    const { dir, before, after } = await cliResults();
-    const f = JSON.parse(await readFile(after, 'utf8')) as ResultFile;
-    f.body.ruleVersion = '9.9.9';
-    const { sha256 } = await import('../src/schema/hash.ts');
-    const { canonicalize } = await import('../src/schema/canonical.ts');
-    f.envelope.resultHash = sha256(canonicalize(f.body));
+    const { dir, before, after } = await pair();
     const other = path.join(dir, 'other.json');
-    await writeFile(other, JSON.stringify(f));
+    await writeFile(other, JSON.stringify(forge(await readResult(after), (b) => void (b.ruleVersion = '9.9.9'))));
     await expect(cli(['diff', '--before', before, '--after', other])).rejects.toMatchObject({
       code: 2, stderr: expect.stringContaining('not comparable: ruleVersion differ'),
     });
+  });
+
+  it('refuses the same result passed twice', async () => {
+    const { dir, before } = await pair();
+    await expect(cli(['diff', '--before', before, '--after', before])).rejects.toMatchObject({
+      code: 2, stderr: expect.stringContaining('both files are the same result'),
+    });
+    // a copy with a different envelope but the same hash is still the same result
+    const copy = await readResult(before);
+    copy.envelope.startedAt = '2030-01-01T00:00:00.000Z';
+    const copyPath = path.join(dir, 'copy.json');
+    await writeFile(copyPath, JSON.stringify(copy));
+    await expect(cli(['diff', '--before', before, '--after', copyPath])).rejects.toMatchObject({ code: 2 });
+  });
+
+  it('notes when the before run started after the after run', async () => {
+    const { before, after } = await pair();
+    const { stdout: ordered } = await cli(['diff', '--before', before, '--after', after]);
+    expect(ordered).not.toContain('check the argument order');
+    const { stdout } = await cli(['diff', '--before', after, '--after', before]);
+    expect(stdout).toContain("Note: the 'before' run started after the 'after' run; check the argument order");
   });
 });

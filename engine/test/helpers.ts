@@ -1,7 +1,12 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { canonicalize } from '../src/schema/canonical.ts';
+import { sha256 } from '../src/schema/hash.ts';
+import type { ResultBody, ResultFile } from '../src/schema/types.ts';
 import { loadCard } from '../src/policy/card.ts';
 import { FsAuditLog, FsBlobStore } from '../src/store/fs.ts';
 import { confirmAndRecord, scanAndRecord, type Deps } from '../src/workflow.ts';
@@ -59,4 +64,41 @@ export async function scanFixture(
     cardHash: confirmed.cardHash,
     obligation: confirmed.obligation,
   });
+}
+
+const run = promisify(execFile);
+export const cli = (args: string[]) => run('node', ['src/cli.ts', ...args], { cwd: ROOT });
+
+/** Rewrite a result file's body and re-hash it, as a forger would. Finding ids are left as given. */
+export function forge(file: ResultFile, mutate: (body: ResultBody) => void): ResultFile {
+  const copy = structuredClone(file);
+  mutate(copy.body);
+  copy.envelope.resultHash = sha256(canonicalize(copy.body));
+  return copy;
+}
+
+/** Confirm once through the CLI, then offer a scan helper that writes result files into the same temp dir. */
+export async function cliSetup(applicability = 'applies') {
+  const dir = await mkdtemp(path.join(tmpdir(), 'curb-cli-'));
+  const ob = path.join(dir, 'ob.json');
+  await cli([
+    'confirm', '--agreement', AGREEMENT_PATH, '--card', CARD_PATH, '--quote', QUOTE, '--allow', 'anthropic',
+    '--approver', 'Test Reviewer', '--at', '2026-10-13T09:00:00.000Z', '--store', dir, '--out', ob,
+    '--applicability', applicability,
+  ]);
+  const scan = async (repo: string, out: string, extra: string[] = []) => {
+    const repoPath = path.isAbsolute(repo) ? repo : path.join(ROOT, 'fixtures/repos', repo);
+    await cli([
+      'scan', '--repo', repoPath, '--card', CARD_PATH, '--agreement', AGREEMENT_PATH,
+      '--obligation', ob, '--store', dir, '--out', out, ...extra,
+    ]).catch((e: { code: number }) => {
+      if (e.code !== 1) throw e;
+    });
+  };
+  const reportArgs = (res: string) => ['report', '--result', res, '--card', CARD_PATH, '--agreement', AGREEMENT_PATH, '--obligation', ob];
+  return { dir, ob, scan, reportArgs };
+}
+
+export async function readResult(p: string): Promise<ResultFile> {
+  return JSON.parse(await readFile(p, 'utf8')) as ResultFile;
 }

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ingestAgreement } from '../src/agreement/ingest.ts';
 import { runScan } from '../src/scan.ts';
+import { takeSnapshot } from '../src/snapshot/snapshot.ts';
 import { scanAndRecord } from '../src/workflow.ts';
 import { ROOT, confirmFixture, fixtureDeps } from './helpers.ts';
 
@@ -20,6 +21,13 @@ async function copyTree(src: string, transform: (s: string) => string, reverse: 
   }
   return dst;
 }
+
+const ORDER_FILES: Record<string, string> = {
+  'B.ts': 'export const b = 1;\n',
+  'a.ts': 'export const a = 1;\n',
+  'a-b.ts': 'export const ab = 1;\n',
+  'a_b.ts': 'export const a_b = 1;\n',
+};
 
 describe('determinism', () => {
   it('gives one result hash across path, line endings and file creation order', async () => {
@@ -58,5 +66,35 @@ describe('determinism', () => {
     expect(b.envelope.operator).toBe('someone-else');
     expect(b.envelope.startedAt).not.toBe(a.envelope.startedAt);
     expect(b.envelope.resultHash).toBe(a.envelope.resultHash);
+  });
+});
+
+describe('ordering', () => {
+  it('sorts by code units, not by locale, and does not depend on directory order', async () => {
+    const confirmed = await confirmFixture(await fixtureDeps());
+    const agreement = ingestAgreement(confirmed.agreementRaw);
+    const src = await mkdtemp(path.join(tmpdir(), 'curb-order-'));
+    for (const [name, content] of Object.entries(ORDER_FILES)) await writeFile(path.join(src, name), content);
+
+    const codeUnitOrder = Object.keys(ORDER_FILES).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const localeOrder = [...codeUnitOrder].sort(new Intl.Collator('en').compare);
+    expect(localeOrder).not.toEqual(codeUnitOrder); // the names really do sort differently
+
+    const snap = await takeSnapshot(src);
+    expect(snap.files.map((f) => f.path)).toEqual(codeUnitOrder);
+    expect(snap.files.map((f) => f.path)).not.toEqual(localeOrder);
+
+    const reversed = await copyTree(src, (s) => s, true);
+    const rawOrder = await readdir(reversed);
+    // Some filesystems return sorted entries whatever the creation order; then this guard cannot bite.
+    if (JSON.stringify(rawOrder) !== JSON.stringify(codeUnitOrder)) {
+      expect(rawOrder).not.toEqual(codeUnitOrder);
+    }
+    const hashes = [];
+    for (const repoPath of [src, reversed]) {
+      const { resultHash } = await runScan({ repoPath, card: confirmed.card, cardHash: confirmed.cardHash, agreement, obligation: confirmed.obligation });
+      hashes.push(resultHash);
+    }
+    expect(hashes[0]).toBe(hashes[1]);
   });
 });

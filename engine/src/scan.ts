@@ -1,4 +1,5 @@
 // engine/src/scan.ts
+import ts from 'typescript';
 import type { AgreementSnapshot } from './agreement/ingest.ts';
 import { EVALUATOR_VERSION, evaluate, type EvaluationOutput } from './evaluator/evaluate.ts';
 import { verifyObligation, type Obligation } from './obligation/obligation.ts';
@@ -20,7 +21,7 @@ export interface ScanInput {
 
 export async function runScan(
   input: ScanInput,
-  evaluateFn: typeof evaluate = evaluate,
+  evaluateFn: typeof evaluate = evaluate, // test-only seam: lets tests inject an evaluator failure
 ): Promise<{ body: ResultBody; resultHash: string; diagnostics: string[] }> {
   const { card, cardHash, agreement, obligation } = input;
   verifyObligation(obligation);
@@ -54,7 +55,8 @@ export async function runScan(
     schemaVersion: '1',
     ruleId: card.id,
     ruleVersion: card.version,
-    evaluatorVersion: EVALUATOR_VERSION,
+    // The TypeScript version decides parse verdicts, so it is part of the evaluator identity.
+    evaluatorVersion: `${EVALUATOR_VERSION}+typescript-${ts.version}`,
     policyCardHash: cardHash,
     treeHash: snapshot.treeHash,
     agreementHash: agreement.textSha256,

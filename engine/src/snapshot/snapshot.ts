@@ -21,7 +21,7 @@ export interface Snapshot {
 
 export interface SnapshotOptions {
   skipDirs?: string[];
-  maxFileBytes?: number;
+  maxFileBytes?: number; // test-only seam: small caps keep size tests fast
 }
 
 const DEFAULT_MAX_FILE_BYTES = 1_048_576;
@@ -70,15 +70,19 @@ export async function takeSnapshot(root: string, options: SnapshotOptions = {}):
 async function readEntry(abs: string, relPath: string, maxBytes: number): Promise<SnapshotFile> {
   try {
     const info = await lstat(abs);
-    if (info.size > maxBytes) {
-      // Raw byte size: the file is never read, so this is the one size that is not normalized-text size.
-      return { path: relPath, status: 'too-large', sha256: null, size: info.size, content: null };
-    }
+    // The cap applies to the normalized text, so CRLF and LF forms of one file get one verdict. CRLF to LF
+    // never shrinks a file by more than half, so a raw size above twice the cap is too large in either form.
+    // Too-large entries keep the raw lstat size (growth detection); converting an already too-large file
+    // between CRLF and LF may therefore change treeHash, but the file is `unknown` either way.
+    const tooLarge = (): SnapshotFile => ({ path: relPath, status: 'too-large', sha256: null, size: info.size, content: null });
+    if (info.size > 2 * maxBytes) return tooLarge();
     const raw = await readFile(abs);
     if (raw.subarray(0, 8192).includes(0)) {
+      if (raw.length > maxBytes) return tooLarge(); // binaries are not normalized, so the raw cap applies as before
       return { path: relPath, status: 'binary', sha256: sha256(raw), size: raw.length, content: null };
     }
     const content = raw.toString('utf8').replace(/\r\n?/g, '\n');
+    if (Buffer.byteLength(content) > maxBytes) return tooLarge();
     return { path: relPath, status: 'ok', sha256: sha256(content), size: Buffer.byteLength(content), content };
   } catch {
     return { path: relPath, status: 'unreadable', sha256: null, size: 0, content: null };

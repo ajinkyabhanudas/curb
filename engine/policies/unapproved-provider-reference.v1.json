@@ -29,6 +29,7 @@
     "A proxy or wrapper module that hides the real provider",
     "Configuration and environment files are not scanned in V1",
     "URLs assembled by string concatenation, split new URL(...) arguments, or template literals whose provider host is not in the literal head",
+    "Template-literal URLs whose literal head ends at or inside the provider host, for example `https://api.openai.com${path}` or `https://api.openai.com:${port}/v1`",
     "Hosts written without a scheme (api.openai.com) or as a subdomain of a registered host",
     "Model identifiers passed anywhere other than the first string-literal argument of a declared constructor, for example generateText({ model: 'openai/gpt-5' })",
     "Aliased constructors (const g = gateway), element access (gateway['languageModel']) and createGateway()('x')",

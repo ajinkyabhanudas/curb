@@ -6,11 +6,11 @@ import { parseArgs } from 'node:util';
 import { ingestAgreement } from './agreement/ingest.ts';
 import { loadCard } from './policy/card.ts';
 import { parseObligation, type Applicability } from './obligation/obligation.ts';
-import { FsAuditLog, FsBlobStore } from './store/fs.ts';
+import { AuditCorruptError, FsAuditLog, FsBlobStore } from './store/fs.ts';
 import { diffResults, renderDeltaMarkdown } from './report/delta.ts';
-import { renderMarkdown } from './report/markdown.ts';
 import { parseResultFile, verifyResultIntegrity } from './schema/result.ts';
-import { safeText } from './terminal.ts';
+import { safeText, stringifyForOutput } from './terminal.ts';
+import { cell, renderMarkdown } from './report/markdown.ts';
 import { confirmAndRecord, exitCodeFor, recordRefusal, scanAndRecord, type Deps } from './workflow.ts';
 
 type Values = Record<string, string | boolean | undefined>;
@@ -115,7 +115,7 @@ async function confirm(args: string[]): Promise<void> {
       exception: values.exception,
     },
   );
-  await output(`${JSON.stringify(obligation, null, 2)}\n`, values.out, values.force);
+  await output(`${stringifyForOutput(obligation, 2)}\n`, values.out, values.force);
 }
 
 async function scan(args: string[]): Promise<number> {
@@ -164,7 +164,7 @@ async function scan(args: string[]): Promise<number> {
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
   for (const d of diagnostics) process.stderr.write(`curb: diagnostic: ${safeText(d)}\n`);
-  if (typeof values.out === 'string') await writeOut(values.out, `${JSON.stringify(file, null, 2)}\n`, values.force);
+  if (typeof values.out === 'string') await writeOut(values.out, `${stringifyForOutput(file, 2)}\n`, values.force);
   return exitCodeFor(body.state);
 }
 
@@ -196,7 +196,14 @@ async function report(args: string[]): Promise<void> {
       throw new Error(`result ${field} (${safeText(String(got))}) does not match the supplied inputs (${want}); refusing to report`);
     }
   }
-  const text = values.format === 'json' ? `${JSON.stringify(file, null, 2)}\n` : renderMarkdown({ file, card, obligation });
+  const applies = obligation.applicability === 'applies';
+  if (file.body.state === 'not-applicable' && applies) {
+    throw new Error('result state is not-applicable but the obligation applies; refusing to report');
+  }
+  if (!applies && file.body.state !== 'not-applicable') {
+    throw new Error(`result state is ${file.body.state} but the obligation is recorded as ${safeText(obligation.applicability)}; refusing to report`);
+  }
+  const text = values.format === 'json' ? `${stringifyForOutput(file, 2)}\n` : renderMarkdown({ file, card, obligation });
   await output(text, values.out, values.force);
 }
 
@@ -209,14 +216,39 @@ async function diff(args: string[]): Promise<void> {
   const read = async (name: string) => {
     const file = parseResultFile(JSON.parse(await readFile(need(values, name), 'utf8')));
     verifyResultIntegrity(file);
-    return file.body;
+    return file;
   };
   const before = await read('before');
   const after = await read('after');
-  await output(`${renderDeltaMarkdown(diffResults(before, after))}\n`, values.out, values.force);
+  if (before.envelope.resultHash === after.envelope.resultHash) throw new Error('both files are the same result; nothing to compare');
+  const notes: string[] = [];
+  if (Date.parse(before.envelope.startedAt) > Date.parse(after.envelope.startedAt)) {
+    notes.push(
+      `Note: the 'before' run started after the 'after' run; check the argument order (before started ${cell(before.envelope.startedAt)}, after started ${cell(after.envelope.startedAt)}).`,
+    );
+  }
+  await output(`${renderDeltaMarkdown(diffResults(before.body, after.body), notes)}\n`, values.out, values.force);
 }
 
-const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan, report, diff };
+async function audit(args: string[]): Promise<number> {
+  const { values } = parseArgs({ args, options: { store: { type: 'string' }, tenant: { type: 'string' } } });
+  const store = need(values, 'store');
+  const ctx = { tenantId: String(values.tenant ?? 'demo'), actor: 'cli' };
+  const log = new FsAuditLog(store);
+  let count = 0;
+  let ok: boolean;
+  try {
+    count = (await log.list(ctx)).length;
+    ok = await log.verify(ctx);
+  } catch (e) {
+    if (!(e instanceof AuditCorruptError)) throw e;
+    ok = false;
+  }
+  process.stdout.write(`tenant: ${safeText(ctx.tenantId)}  entries: ${count}\naudit chain ${ok ? 'OK' : 'CORRUPT'}\n`);
+  return ok ? 0 : 2;
+}
+
+const COMMANDS: Record<string, (args: string[]) => Promise<number | void>> = { confirm, scan, report, diff, audit };
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);

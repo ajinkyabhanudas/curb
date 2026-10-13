@@ -2,7 +2,7 @@
 // Strict validation of a result file read from disk. It is untrusted input: every field is checked.
 import { canonicalize } from './canonical.ts';
 import { sha256 } from './hash.ts';
-import type { ResultFile, UnknownReason } from './types.ts';
+import type { ResultBody, ResultFile, UnknownReason } from './types.ts';
 
 const STATES = ['pass', 'fail', 'unknown', 'not-applicable', 'error'];
 const SEVERITIES = ['critical', 'high', 'medium', 'low'];
@@ -44,6 +44,33 @@ function arr(v: unknown, where: string): unknown[] {
   return v;
 }
 
+/** A state must be consistent with the evidence in the same body, so a re-hashed forgery cannot claim PASS with findings. */
+export function assertStateInvariants(body: ResultBody): void {
+  const bad = (why: string): never => {
+    throw new ResultShapeError('body.state', `"${body.state}" is inconsistent with the body: ${why}`);
+  };
+  const { state, findings, unknownFiles, filesEvaluated, notes } = body;
+  switch (state) {
+    case 'pass':
+      if (findings.length > 0) bad('it has findings');
+      if (unknownFiles.length > 0) bad('it has unknown files');
+      if (filesEvaluated < 1) bad('no file was evaluated');
+      break;
+    case 'fail':
+      if (findings.length < 1) bad('it has no findings');
+      break;
+    case 'unknown':
+      if (unknownFiles.length < 1 && !notes.includes('no-evaluable-files')) bad('it has no unknown files and no no-evaluable-files note');
+      break;
+    case 'not-applicable':
+      if (findings.length > 0 || unknownFiles.length > 0 || filesEvaluated !== 0) bad('it has findings, unknown files or evaluated files');
+      break;
+    case 'error':
+      if (findings.length > 0 || filesEvaluated !== 0) bad('it has findings or evaluated files');
+      break;
+  }
+}
+
 export function parseResultFile(raw: unknown): ResultFile {
   const top = obj(raw, 'result', ['body', 'envelope']);
   const b = obj(top.body, 'body', [
@@ -72,6 +99,8 @@ export function parseResultFile(raw: unknown): ResultFile {
   });
   int(b.filesEvaluated, 'body.filesEvaluated', 0);
   for (const k of ['exclusions', 'notes']) arr(b[k], `body.${k}`).forEach((s, i) => str(s, `body.${k}[${i}]`));
+
+  assertStateInvariants(b as unknown as ResultBody);
 
   const env = obj(top.envelope, 'envelope', ['resultHash', 'startedAt', 'finishedAt', 'operator', 'tenantId']);
   hex(env.resultHash, 'envelope.resultHash');
