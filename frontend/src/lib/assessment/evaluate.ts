@@ -13,15 +13,19 @@ function toResults(requirement: Requirement, input: AssessmentInput): Assessment
   });
 }
 
-export function evaluate(input: AssessmentInput, now: Date = new Date()): Assessment {
+/** Pure and timestamp-free, so it is safe to call while rendering. */
+export function assess(input: AssessmentInput): AssessmentResult[] {
   const selected = new Set(input.frameworks);
-  const results = REQUIREMENTS.filter((r) => selected.has(r.framework)).flatMap((r) => toResults(r, input));
-  return { input, generatedAt: now.toISOString(), results };
+  return REQUIREMENTS.filter((r) => selected.has(r.framework)).flatMap((r) => toResults(r, input));
 }
 
-export function groupByStatus(assessment: Assessment): Record<FindingStatus, AssessmentResult[]> {
+export function evaluate(input: AssessmentInput, now: Date = new Date()): Assessment {
+  return { input, generatedAt: now.toISOString(), results: assess(input) };
+}
+
+export function groupByStatus(results: AssessmentResult[]): Record<FindingStatus, AssessmentResult[]> {
   const groups: Record<FindingStatus, AssessmentResult[]> = { gap: [], needs_evidence: [], needs_legal: [], no_gap: [] };
-  for (const result of assessment.results) groups[result.finding.status].push(result);
+  for (const result of results) groups[result.finding.status].push(result);
   return groups;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultInput } from "./defaults";
-import { evaluate, groupByStatus } from "./evaluate";
+import { assess, evaluate, groupByStatus } from "./evaluate";
 import type { AssessmentInput } from "./types";
 
 const base = (over: Partial<AssessmentInput> = {}): AssessmentInput => ({ ...defaultInput(), ...over });
@@ -127,11 +127,16 @@ describe("evaluate", () => {
     }
   });
 
+  it("assess returns the same results as evaluate without needing a clock", () => {
+    const input = base({ useCase: "employment" });
+    expect(assess(input)).toEqual(evaluate(input).results);
+  });
+
   it("groups results by status and stamps the generation time", () => {
     const now = new Date("2026-01-02T03:04:05.000Z");
     const assessment = evaluate(base({ prohibitedPractice: true }), now);
     expect(assessment.generatedAt).toBe(now.toISOString());
-    const groups = groupByStatus(assessment);
+    const groups = groupByStatus(assessment.results);
     expect(Object.values(groups).flat()).toHaveLength(assessment.results.length);
     expect(groups.gap.some((r) => r.requirement.id === "eu-art-5")).toBe(true);
   });
