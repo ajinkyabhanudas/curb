@@ -1,0 +1,34 @@
+Third-party assets in this directory
+====================================
+
+The Markdown files in this directory (AI-Addendum.md, DPA.md, CSA.md, sla.md)
+are unmodified copies of agreements published by Common Paper
+(https://github.com/CommonPaper). They are used under the Creative Commons
+Attribution 4.0 International license (CC BY 4.0):
+
+    https://creativecommons.org/licenses/by/4.0/
+
+Common Paper states in each repository README: "Common Paper agreements are
+free to use and modify under CC BY 4.0."
+
+Attribution
+-----------
+
+Source: Common Paper, https://github.com/CommonPaper
+Creator: Common Paper, Inc.
+License: CC BY 4.0
+Changes: none. Files are verbatim copies of the upstream default-branch
+         files at the commits listed below.
+
+File             Upstream file                          Upstream commit
+---------------  -------------------------------------  ----------------------------------------
+AI-Addendum.md   CommonPaper/AI-Addendum/AI-Addendum.md 6d9b044df73a2477c177e5989fca7f8d27df9387
+DPA.md           CommonPaper/DPA/DPA.md                 9f1c40d3fb0bb900397a919d058a9c0870f6b0f0
+CSA.md           CommonPaper/CSA/CSA.md                 3efceb01e3c8bfb7b302a5f34975aa2b084026a3
+sla.md           CommonPaper/SLA/sla.md                 5b0e6336f058a66c4976d70ecabf1f5fb9ef3af4
+
+Any derivative works created from these files must retain this attribution,
+link to the license, and indicate what was changed.
+
+This notice covers only the files in this directory. The rest of the
+repository is licensed under the terms of the root LICENSE file.
