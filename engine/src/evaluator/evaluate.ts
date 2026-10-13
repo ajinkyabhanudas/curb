@@ -2,8 +2,7 @@
 import path from 'node:path';
 import ts from 'typescript';
 import { own, type PolicyCard } from '../policy/card.ts';
-import { canonicalize } from '../schema/canonical.ts';
-import { sha256 } from '../schema/hash.ts';
+import { compareStrings as compare, findingId } from '../schema/hashing.ts';
 import type { Finding, ResultState, UnknownFile, UnknownReason } from '../schema/types.ts';
 import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 
@@ -31,10 +30,6 @@ export interface EvaluationOutput {
   unknownFiles: UnknownFile[];
   filesEvaluated: number;
   notes: string[];
-}
-
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function evaluate({ snapshot, card, allowlist }: EvaluationInput): EvaluationOutput {
@@ -176,9 +171,7 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
     const end = node.getEnd();
     const { line, character } = sf.getLineAndCharacterOfPosition(start);
     out.push({
-      id: sha256(
-        canonicalize({ ruleId: card.id, ruleVersion: card.version, path: filePath, start, end, matched: text }),
-      ),
+      id: findingId({ ruleId: card.id, ruleVersion: card.version, path: filePath, start, end, matched: text }),
       ruleId: card.id,
       ruleVersion: card.version,
       severity: card.severity,

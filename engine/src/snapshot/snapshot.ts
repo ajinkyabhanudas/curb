@@ -1,6 +1,6 @@
 import { lstat, readdir, readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalize } from '../schema/canonical.ts';
+import { compareStrings as compare, hashOf, normalizeNewlines } from '../schema/hashing.ts';
 import { sha256 } from '../schema/hash.ts';
 
 export type FileStatus = 'ok' | 'symlink' | 'too-large' | 'unreadable' | 'binary';
@@ -25,10 +25,6 @@ export interface SnapshotOptions {
 }
 
 const DEFAULT_MAX_FILE_BYTES = 1_048_576;
-
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 export async function takeSnapshot(root: string, options: SnapshotOptions = {}): Promise<Snapshot> {
   const absRoot = path.resolve(root);
@@ -58,12 +54,10 @@ export async function takeSnapshot(root: string, options: SnapshotOptions = {}):
   await walk(absRoot, '');
   files.sort((a, b) => compare(a.path, b.path));
   skippedDirs.sort(compare);
-  const treeHash = sha256(
-    canonicalize({
-      files: files.map((f) => ({ path: f.path, status: f.status, sha256: f.sha256, size: f.size })),
-      skippedDirs,
-    }),
-  );
+  const treeHash = hashOf({
+    files: files.map((f) => ({ path: f.path, status: f.status, sha256: f.sha256, size: f.size })),
+    skippedDirs,
+  });
   return { treeHash, files, skippedDirs };
 }
 
@@ -81,7 +75,7 @@ async function readEntry(abs: string, relPath: string, maxBytes: number): Promis
       if (raw.length > maxBytes) return tooLarge(); // binaries are not normalized, so the raw cap applies as before
       return { path: relPath, status: 'binary', sha256: sha256(raw), size: raw.length, content: null };
     }
-    const content = raw.toString('utf8').replace(/\r\n?/g, '\n');
+    const content = normalizeNewlines(raw.toString('utf8'));
     if (Buffer.byteLength(content) > maxBytes) return tooLarge();
     return { path: relPath, status: 'ok', sha256: sha256(content), size: Buffer.byteLength(content), content };
   } catch {

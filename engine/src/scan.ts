@@ -4,8 +4,7 @@ import type { AgreementSnapshot } from './agreement/ingest.ts';
 import { EVALUATOR_VERSION, evaluate, type EvaluationOutput } from './evaluator/evaluate.ts';
 import { verifyObligation, type Obligation } from './obligation/obligation.ts';
 import type { PolicyCard } from './policy/card.ts';
-import { canonicalize } from './schema/canonical.ts';
-import { sha256 } from './schema/hash.ts';
+import { hashOf } from './schema/hashing.ts';
 import type { ResultBody } from './schema/types.ts';
 import { takeSnapshot } from './snapshot/snapshot.ts';
 
@@ -68,5 +67,5 @@ export async function runScan(
     exclusions: [...card.exclusions.dirs.map((d) => `dir:${d}`), ...card.exclusions.files.map((f) => `file:${f}`)].sort(),
     notes: outcome.notes,
   };
-  return { body, resultHash: sha256(canonicalize(body)), diagnostics };
+  return { body, resultHash: hashOf(body), diagnostics };
 }

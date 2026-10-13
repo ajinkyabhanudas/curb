@@ -1,8 +1,7 @@
 // engine/src/obligation/obligation.ts
 import type { AgreementSnapshot } from '../agreement/ingest.ts';
 import { registryProviderIds, type PolicyCard } from '../policy/card.ts';
-import { canonicalize } from '../schema/canonical.ts';
-import { sha256 } from '../schema/hash.ts';
+import { hashOf, isPlainObjectOrNullProto as isPlainObject } from '../schema/hashing.ts';
 
 export type Applicability = 'applies' | 'not-applicable' | 'needs-counsel' | 'unsupported';
 
@@ -36,12 +35,6 @@ const REQUIRED_KEYS = [
   'approvedAt',
 ];
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
-  const proto = Object.getPrototypeOf(v);
-  return proto === Object.prototype || proto === null;
-}
 
 function checkShape(raw: unknown, withId: boolean): Record<string, unknown> {
   if (!isPlainObject(raw)) throw new Error('obligation must be a plain object');
@@ -139,13 +132,13 @@ export function confirmObligation(input: ObligationInput, agreement: AgreementSn
     if (dup !== undefined) throw new Error(`allowlist contains a duplicate provider: ${dup}`);
   }
   const picked = pickInput(input);
-  return { ...picked, id: sha256(canonicalize(picked)) };
+  return { ...picked, id: hashOf(picked) };
 }
 
 export function verifyObligation(obligation: Obligation): void {
   if (!isPlainObject(obligation)) throw new Error('obligation must be a plain object');
   const { id, ...input } = obligation;
-  if (sha256(canonicalize(input)) !== id) throw new Error('obligation id does not match its content (tampered or edited)');
+  if (hashOf(input) !== id) throw new Error('obligation id does not match its content (tampered or edited)');
 }
 
 export function parseObligation(raw: unknown, agreement: AgreementSnapshot, card: PolicyCard): Obligation {

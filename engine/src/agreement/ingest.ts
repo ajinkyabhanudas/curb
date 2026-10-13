@@ -1,4 +1,5 @@
 import { sha256 } from '../schema/hash.ts';
+import { normalizeNewlines } from '../schema/hashing.ts';
 
 export interface AgreementSnapshot {
   rawSha256: string;
@@ -15,6 +16,6 @@ export function ingestAgreement(raw: string | Uint8Array): AgreementSnapshot {
     throw new Error('agreement is not valid UTF-8');
   }
   // Offsets refer to the text without a leading BOM; rawSha256 still covers the original bytes.
-  const text = (decoded.startsWith('﻿') ? decoded.slice(1) : decoded).replace(/\r\n?/g, '\n');
+  const text = normalizeNewlines(decoded.startsWith('﻿') ? decoded.slice(1) : decoded);
   return { rawSha256: sha256(bytes), textSha256: sha256(text), text };
 }

@@ -1,20 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { canonicalize } from '../schema/canonical.ts';
 import { sha256 } from '../schema/hash.ts';
+import { HEX64, hashOf, isPlainObject } from '../schema/hashing.ts';
 import type { AuditEntry, AuditLog, BlobStore, TenantContext } from './types.ts';
 
 const TENANT_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
-const HASH_RE = /^[0-9a-f]{64}$/;
 const GENESIS = '0'.repeat(64);
 
 export class AuditCorruptError extends Error {}
 export class BlobIntegrityError extends Error {}
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
-}
 
 function parseEntry(line: string, lineNo: number): AuditEntry {
   const bad = (why: string) => new AuditCorruptError(`audit log corrupt at line ${lineNo}: ${why}`);
@@ -30,8 +25,8 @@ function parseEntry(line: string, lineNo: number): AuditEntry {
   if (typeof v.actor !== 'string') throw bad('actor must be a string');
   if (typeof v.type !== 'string') throw bad('type must be a string');
   if (!isPlainObject(v.data)) throw bad('data must be an object');
-  if (typeof v.prevHash !== 'string' || !HASH_RE.test(v.prevHash)) throw bad('prevHash must be 64 hex chars');
-  if (typeof v.hash !== 'string' || !HASH_RE.test(v.hash)) throw bad('hash must be 64 hex chars');
+  if (typeof v.prevHash !== 'string' || !HEX64.test(v.prevHash)) throw bad('prevHash must be 64 hex chars');
+  if (typeof v.hash !== 'string' || !HEX64.test(v.hash)) throw bad('hash must be 64 hex chars');
   return v as unknown as AuditEntry;
 }
 
@@ -42,7 +37,7 @@ function chainValid(entries: AuditEntry[]): boolean {
     const { hash, ...base } = entry;
     if (entry.seq !== seq || entry.prevHash !== prevHash) return false;
     try {
-      if (sha256(canonicalize(base)) !== hash) return false;
+      if (hashOf(base) !== hash) return false;
     } catch {
       return false; // data that cannot be canonicalized cannot match its hash
     }
@@ -82,7 +77,7 @@ export class FsBlobStore implements BlobStore {
 
   async get(ctx: TenantContext, sha: string): Promise<Uint8Array | null> {
     const dir = path.join(tenantDir(this.root, ctx), 'blobs');
-    if (!HASH_RE.test(sha)) throw new Error('invalid blob hash');
+    if (!HEX64.test(sha)) throw new Error('invalid blob hash');
     let bytes: Uint8Array;
     try {
       bytes = await readFile(path.join(dir, sha));
@@ -138,7 +133,7 @@ export class FsAuditLog implements AuditLog {
       prevHash: prev ? prev.hash : GENESIS,
     };
     // Fully build and hash the entry (canonicalize throws on non-JSON data) before any write.
-    const entry: AuditEntry = { ...base, hash: sha256(canonicalize(base)) };
+    const entry: AuditEntry = { ...base, hash: hashOf(base) };
     const line = `${JSON.stringify(entry)}\n`;
     await mkdir(tenantDir(this.root, ctx), { recursive: true });
     await appendFile(this.file(ctx), line);

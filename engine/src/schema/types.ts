@@ -1,5 +1,8 @@
-export type ResultState = 'pass' | 'fail' | 'unknown' | 'not-applicable' | 'error';
-export type Severity = 'critical' | 'high' | 'medium' | 'low';
+// The value lists are the single source of truth: the unions derive from them and the result validator reads them.
+export const RESULT_STATES = ['pass', 'fail', 'unknown', 'not-applicable', 'error'] as const;
+export type ResultState = (typeof RESULT_STATES)[number];
+export const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+export type Severity = (typeof SEVERITIES)[number];
 
 export interface Evidence {
   path: string;
@@ -23,14 +26,16 @@ export interface Finding {
   evidence: Evidence;
 }
 
-export type UnknownReason =
-  | 'parse-error'
-  | 'minified'
-  | 'generated'
-  | 'unsupported-language'
-  | 'too-large'
-  | 'symlink'
-  | 'unreadable';
+export const UNKNOWN_REASONS = [
+  'parse-error',
+  'minified',
+  'generated',
+  'unsupported-language',
+  'too-large',
+  'symlink',
+  'unreadable',
+] as const;
+export type UnknownReason = (typeof UNKNOWN_REASONS)[number];
 
 export interface UnknownFile {
   path: string;

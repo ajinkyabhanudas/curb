@@ -1,7 +1,6 @@
 // engine/src/policy/card.ts
 import { readFile } from 'node:fs/promises';
-import { canonicalize } from '../schema/canonical.ts';
-import { sha256 } from '../schema/hash.ts';
+import { hashOf } from '../schema/hashing.ts';
 import type { Severity } from '../schema/types.ts';
 
 export interface PolicyCard {
@@ -79,7 +78,7 @@ export function validateCard(raw: unknown): PolicyCard {
 
 export async function loadCard(file: string): Promise<{ card: PolicyCard; hash: string }> {
   const card = validateCard(JSON.parse(await readFile(file, 'utf8')));
-  return { card, hash: sha256(canonicalize(card)) };
+  return { card, hash: hashOf(card) };
 }
 
 export function registryProviderIds(card: PolicyCard): string[] {

@@ -10,6 +10,7 @@ import type { PolicyCard } from './policy/card.ts';
 import type { ResultFile, ResultState } from './schema/types.ts';
 import type { evaluate } from './evaluator/evaluate.ts';
 import { sha256 } from './schema/hash.ts';
+import { HEX64 } from './schema/hashing.ts';
 import { runScan } from './scan.ts';
 import type { AuditLog, BlobStore, TenantContext } from './store/types.ts';
 
@@ -69,7 +70,6 @@ export async function confirmAndRecord(
   return obligation;
 }
 
-const HEX64 = /^[0-9a-f]{64}$/;
 
 function reasonOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);

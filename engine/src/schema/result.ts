@@ -1,13 +1,9 @@
 // engine/src/schema/result.ts
 // Strict validation of a result file read from disk. It is untrusted input: every field is checked.
-import { canonicalize } from './canonical.ts';
-import { sha256 } from './hash.ts';
-import type { ResultBody, ResultFile, UnknownReason } from './types.ts';
+import { HEX64, findingId, hashOf } from './hashing.ts';
+import { RESULT_STATES, SEVERITIES, UNKNOWN_REASONS, type ResultBody, type ResultFile } from './types.ts';
 
-const STATES = ['pass', 'fail', 'unknown', 'not-applicable', 'error'];
-const SEVERITIES = ['critical', 'high', 'medium', 'low'];
-const REASONS: UnknownReason[] = ['parse-error', 'minified', 'generated', 'unsupported-language', 'too-large', 'symlink', 'unreadable'];
-const HEX64 = /^[0-9a-f]{64}$/;
+// Consolidating the card, obligation, result and audit-entry validators into one module is deferred.
 
 class ResultShapeError extends Error {
   constructor(where: string, why: string) {
@@ -35,7 +31,7 @@ function int(v: unknown, where: string, min = Number.MIN_SAFE_INTEGER): number {
   if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < min) throw new ResultShapeError(where, 'must be a safe integer' + (min >= 0 ? ' >= 0' : ''));
   return v;
 }
-function oneOf(v: unknown, where: string, allowed: string[]): string {
+function oneOf(v: unknown, where: string, allowed: readonly string[]): string {
   if (typeof v !== 'string' || !allowed.includes(v)) throw new ResultShapeError(where, `must be one of ${allowed.join(', ')}`);
   return v;
 }
@@ -80,7 +76,7 @@ export function parseResultFile(raw: unknown): ResultFile {
   if (b.schemaVersion !== '1') throw new ResultShapeError('body.schemaVersion', "must be '1'");
   for (const k of ['ruleId', 'ruleVersion', 'evaluatorVersion']) str(b[k], `body.${k}`);
   for (const k of ['policyCardHash', 'treeHash', 'agreementHash', 'obligationHash']) hex(b[k], `body.${k}`);
-  oneOf(b.state, 'body.state', STATES);
+  oneOf(b.state, 'body.state', RESULT_STATES);
   arr(b.findings, 'body.findings').forEach((f, i) => {
     const w = `body.findings[${i}]`;
     const o = obj(f, w, ['id', 'ruleId', 'ruleVersion', 'severity', 'providerId', 'matched', 'evidence']);
@@ -95,7 +91,7 @@ export function parseResultFile(raw: unknown): ResultFile {
   arr(b.unknownFiles, 'body.unknownFiles').forEach((u, i) => {
     const o = obj(u, `body.unknownFiles[${i}]`, ['path', 'reason']);
     str(o.path, `body.unknownFiles[${i}].path`);
-    oneOf(o.reason, `body.unknownFiles[${i}].reason`, REASONS);
+    oneOf(o.reason, `body.unknownFiles[${i}].reason`, UNKNOWN_REASONS);
   });
   int(b.filesEvaluated, 'body.filesEvaluated', 0);
   for (const k of ['exclusions', 'notes']) arr(b[k], `body.${k}`).forEach((s, i) => str(s, `body.${k}[${i}]`));
@@ -110,13 +106,11 @@ export function parseResultFile(raw: unknown): ResultFile {
 
 /** Recompute the result hash and every finding id; a mismatch means the file was edited after the scan. */
 export function verifyResultIntegrity(file: ResultFile): void {
-  if (sha256(canonicalize(file.body)) !== file.envelope.resultHash) {
+  if (hashOf(file.body) !== file.envelope.resultHash) {
     throw new Error('result hash does not match its body: the file was edited');
   }
   file.body.findings.forEach((f, i) => {
-    const id = sha256(
-      canonicalize({ ruleId: f.ruleId, ruleVersion: f.ruleVersion, path: f.evidence.path, start: f.evidence.start, end: f.evidence.end, matched: f.matched }),
-    );
+    const id = findingId({ ruleId: f.ruleId, ruleVersion: f.ruleVersion, path: f.evidence.path, start: f.evidence.start, end: f.evidence.end, matched: f.matched });
     if (id !== f.id) throw new Error(`finding id does not match its content: body.findings[${i}] was edited`);
   });
 }

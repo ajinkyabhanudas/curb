@@ -118,6 +118,16 @@ async function confirm(args: string[]): Promise<void> {
   await output(`${stringifyForOutput(obligation, 2)}\n`, values.out, values.force);
 }
 
+/** Load and cross-check the card, agreement and obligation named on the command line. `seen.raw` receives the parsed obligation JSON for refusal records. */
+async function loadInputs(values: Values, seen: { raw?: unknown } = {}) {
+  const { card, hash } = await loadCard(need(values, 'card'));
+  const agreementRaw = await readFile(need(values, 'agreement'));
+  seen.raw = JSON.parse(await readFile(need(values, 'obligation'), 'utf8'));
+  const agreement = ingestAgreement(agreementRaw);
+  const obligation = parseObligation(seen.raw, agreement, card);
+  return { card, hash, agreementRaw, agreement, obligation };
+}
+
 async function scan(args: string[]): Promise<number> {
   const { values } = parseArgs({
     args,
@@ -132,18 +142,15 @@ async function scan(args: string[]): Promise<number> {
   await assertStoreOutsideRepo(store, repo);
   await checkOut(values.out, values.force);
   const deps = makeDeps(values, String(values.actor));
-  let raw: unknown;
-  let prepared;
+  const seen: { raw?: unknown } = {};
+  let inputs;
   try {
-    const { card, hash } = await loadCard(need(values, 'card'));
-    const agreementRaw = await readFile(need(values, 'agreement'));
-    raw = JSON.parse(await readFile(need(values, 'obligation'), 'utf8'));
-    prepared = { card, hash, agreementRaw, obligation: parseObligation(raw, ingestAgreement(agreementRaw), card) };
+    inputs = await loadInputs(values, seen);
   } catch (e) {
-    await recordRefusal(deps, raw, e instanceof Error ? e.message : String(e));
+    await recordRefusal(deps, seen.raw, e instanceof Error ? e.message : String(e));
     throw e;
   }
-  const { card, hash, agreementRaw, obligation } = prepared;
+  const { card, hash, agreementRaw, obligation } = inputs;
   const { diagnostics, ...file } = await scanAndRecord(deps, {
     repoPath: repo,
     agreementRaw,
@@ -180,9 +187,7 @@ async function report(args: string[]): Promise<void> {
   await checkOut(values.out, values.force);
   const file = parseResultFile(JSON.parse(await readFile(need(values, 'result'), 'utf8')));
   verifyResultIntegrity(file);
-  const { card, hash } = await loadCard(need(values, 'card'));
-  const agreement = ingestAgreement(await readFile(need(values, 'agreement')));
-  const obligation = parseObligation(JSON.parse(await readFile(need(values, 'obligation'), 'utf8')), agreement, card);
+  const { card, hash, agreement, obligation } = await loadInputs(values);
   const expected: Record<string, string> = {
     obligationHash: obligation.id,
     agreementHash: agreement.textSha256,
