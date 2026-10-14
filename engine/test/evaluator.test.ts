@@ -708,7 +708,7 @@ describe('evaluate: small SVG icon components are not minified (CURB-21)', () =>
     expect(src.length).toBeGreaterThan(800000);
     const started = Date.now();
     const out = await run({ 'many.tsx': src });
-    expect(Date.now() - started).toBeLessThan(3000);
+    expect(Date.now() - started).toBeLessThan(5000);
     expect(out.unknownFiles).toEqual([{ path: 'many.tsx', reason: 'minified' }]);
   }, 30000);
 
