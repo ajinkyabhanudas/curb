@@ -693,6 +693,16 @@ describe('evaluate: small SVG icon components are not minified (CURB-21)', () =>
     ]);
   });
 
+  it('does not throw, and still exempts the attribute, when U+2028 or U+2029 sit before it (CURB-21 review)', async () => {
+    const d = pathData(260);
+    const out = await run({
+      'one-line.tsx': `/*\u2028\u2029*/export const a = <path d="${d}" />;`,
+      'multi-line.tsx': `/*\u2028*/export const A = () => (\n  <svg>\n    <path d="${d}" />\n  </svg>\n);\n`,
+    });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.filesEvaluated).toBe(2);
+  });
+
   it('does not exempt a long JSX attribute in a .js file or by name', async () => {
     const out = await run({ 'icon.js': icon(), 'vendor.min.js': 'var a=1;' });
     expect(out.unknownFiles.map((u) => u.path).sort()).toEqual(['icon.js', 'vendor.min.js']);

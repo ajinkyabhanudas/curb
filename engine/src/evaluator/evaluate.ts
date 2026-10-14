@@ -146,10 +146,10 @@ function looksMinified(filePath: string, content: string): boolean {
   if (long <= total * MINIFIED_LONG_LINE_SHARE) return false;
   const ext = path.extname(filePath).toLowerCase();
   if (ext !== '.tsx' && ext !== '.jsx') return true;
-  return long - jsxAttributeBytesOnLongLines(filePath, content, lines) > total * MINIFIED_LONG_LINE_SHARE;
+  return long - jsxAttributeBytesOnLongLines(filePath, content) > total * MINIFIED_LONG_LINE_SHARE;
 }
 
-function jsxAttributeBytesOnLongLines(filePath: string, content: string, lines: string[]): number {
+function jsxAttributeBytesOnLongLines(filePath: string, content: string): number {
   const kind = filePath.toLowerCase().endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.JSX;
   const source = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, false, kind);
   let bytes = 0;
@@ -157,8 +157,11 @@ function jsxAttributeBytesOnLongLines(filePath: string, content: string, lines: 
     if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
       const start = node.initializer.getStart(source);
       const text = content.slice(start, node.initializer.end);
-      const line = source.getLineAndCharacterOfPosition(start).line;
-      if (!text.includes('\n') && lines[line].length > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
+      // Lines are split on \n only, as in looksMinified: TypeScript also breaks lines on U+2028 and U+2029.
+      const lineStart = content.lastIndexOf('\n', start - 1) + 1;
+      const lineEnd = content.indexOf('\n', start);
+      const lineLength = (lineEnd === -1 ? content.length : lineEnd) - lineStart;
+      if (!text.includes('\n') && lineLength > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
     }
     ts.forEachChild(node, visit);
   };
