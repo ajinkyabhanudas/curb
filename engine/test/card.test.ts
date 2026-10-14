@@ -17,7 +17,8 @@ describe('policy card', () => {
     const { card } = await loadCard(CARD_PATH);
     expect(registryProviderIds(card)).toEqual([
       'alibaba', 'amazon', 'anthropic', 'azure', 'bedrock', 'cohere', 'deepinfra', 'deepseek', 'fireworks', 'google',
-      'groq', 'meta', 'minimax', 'mistral', 'moonshotai', 'nvidia', 'openai', 'perplexity', 'togetherai', 'xai', 'zai',
+      'groq', 'meta', 'minimax', 'mistral', 'moonshotai', 'nvidia', 'openai', 'openrouter', 'perplexity', 'togetherai', 'xai',
+      'zai',
     ]);
   });
 
@@ -39,9 +40,9 @@ describe('policy card', () => {
     expect(own({ a: 'x' }, '__proto__')).toBeUndefined();
   });
 
-  it('ships version 1.1.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
+  it('ships version 1.2.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
     const { card, hash } = await loadCard(CARD_PATH);
-    expect(card.version).toBe('1.1.0');
+    expect(card.version).toBe('1.2.0');
     expect(card.status).toBe('draft, pending counsel approval');
     const edits: ((c: typeof card) => void)[] = [
       (c) => c.approvedTextPatterns.push('extra'),
