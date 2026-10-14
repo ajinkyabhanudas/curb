@@ -58,7 +58,7 @@ export async function buildPdf(assessment: Assessment): Promise<jsPDF> {
   const doc = new jsPDF();
   const w = new Writer(doc);
   const { input } = assessment;
-  const groups = groupByStatus(assessment);
+  const groups = groupByStatus(assessment.results);
 
   w.text("AI Compliance Assessment", { size: 18, bold: true });
   w.gap(2);

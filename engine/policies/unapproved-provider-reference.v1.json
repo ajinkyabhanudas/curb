@@ -1,0 +1,93 @@
+{
+  "id": "unapproved-provider-reference",
+  "version": "1.0.1",
+  "status": "draft, pending counsel approval",
+  "owner": "unassigned (to be named by the product owner)",
+  "reviewDate": "2026-10-13",
+  "severity": "high",
+  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal or gateway model identifier in scanned source that resolves to a registered provider outside the customer's allowlist is a finding.",
+  "approvedTextPatterns": [
+    "Provider will route Customer Content for model inference only to the following model providers: <list>."
+  ],
+  "requiredFacts": [
+    "The customer allowlist, as normalized provider IDs from the registry",
+    "A human-confirmed obligation citing the exact agreement text"
+  ],
+  "prerequisites": [
+    "Source is TypeScript or JavaScript",
+    "Files are readable, under the size cap and not minified or generated",
+    "Only files with a TypeScript or JavaScript extension (.ts .tsx .js .jsx .mjs .cjs .mts .cts) are analyzed",
+    "These non-code file types are never scanned: .md .markdown .txt .rst .json .jsonc .yaml .yml .toml .ini .cfg .conf .env .lock .log .csv .tsv .xml .svg .png .jpg .jpeg .gif .webp .avif .ico .bmp .tiff .woff .woff2 .ttf .otf .eot .pdf .zip .gz .tar .tgz .map .css .scss .sass .less .sql .graphql .gql .prisma, the suffix-like extensions .local .example .sample .template .dist, and the compiled and media types .wasm .node .so .dll .dylib .exe .bin .jar .class .o .a .pyc .db .sqlite .sqlite3 .mp3 .mp4 .mov .webm .ogg .wav .flac .avi .psd .icns .heic (the list is IGNORABLE_EXT in engine/src/evaluator/evaluate.ts)",
+    "Every other file type yields unknown: unsupported-language for text, unreadable for binary content (a NUL byte near the start, including UTF-16 text); an extensionless file starting with #! yields unknown; other extensionless files, text or binary, are not scanned",
+    "A symlink yields unknown whatever its name; a file that is too large or unreadable yields unknown unless its type is never scanned"
+  ],
+  "falsePositiveExamples": [
+    "A provider import in a test-only file that never ships",
+    "A provider referenced in code that is never executed"
+  ],
+  "falseNegativeRisks": [
+    "A provider that is not in the registry is not flagged",
+    "Dynamic specifiers such as require(name) or template literals with substitutions",
+    "Model identifiers held in variables or environment files",
+    "A proxy or wrapper module that hides the real provider",
+    "Configuration and environment files are not scanned in V1",
+    "URLs assembled by string concatenation, split new URL(...) arguments, or template literals whose provider host is not in the literal head",
+    "Template-literal URLs whose literal head ends at or inside the provider host, for example `https://api.openai.com${path}` or `https://api.openai.com:${port}/v1`",
+    "Hosts written without a scheme (api.openai.com) or as a subdomain of a registered host",
+    "Model identifiers passed anywhere other than the first string-literal argument of a declared constructor, for example generateText({ model: 'openai/gpt-5' })",
+    "Aliased constructors (const g = gateway), element access (gateway['languageModel']) and createGateway()('x')",
+    "Files whose extension is not TypeScript or JavaScript: the embedding formats reported unknown are covered, but .md, .json, .yaml and .env files are not scanned",
+    "Exclusion directories are matched by name at any depth, so a directory named like an exclusion is skipped wherever it sits",
+    "Code inside a never-scanned file type (for example a provider URL in .sql, .graphql or a config file) is not flagged",
+    "Binary content is never analyzed: an extensionless binary file is skipped, a text file with an unlisted extension yields unknown, and never-scanned types are not analyzed whatever their content",
+    "createRequire(...)('openai') and other loaders reached through a created require function",
+    "declare module 'openai' blocks in declaration files",
+    "Tagged-template constructor calls such as gateway`openai/gpt-5`",
+    "Test mocks such as vi.mock('openai') and jest.mock('openai')",
+    "A TypeScript path alias or bundler alias that rewrites a package to another name",
+    ".git directories are skipped at every depth, so source placed inside any directory named .git is not scanned"
+  ],
+  "evidenceBoundaries": [
+    "Findings show where source references a provider, not where traffic goes at runtime"
+  ],
+  "nonClaims": [
+    "Does not establish which provider receives data at runtime",
+    "Does not establish provider conduct, retention or training use",
+    "Does not detect dead code or proxy rerouting",
+    "Does not establish that the allowlist matches the signed agreement; a named human confirms that",
+    "Is not legal advice or a compliance certification"
+  ],
+  "exclusions": {
+    "dirs": ["node_modules", ".next", "dist"],
+    "files": ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
+  },
+  "registry": {
+    "packages": {
+      "openai": "openai",
+      "@ai-sdk/openai": "openai",
+      "@anthropic-ai/sdk": "anthropic",
+      "@ai-sdk/anthropic": "anthropic",
+      "@ai-sdk/google": "google",
+      "@google/generative-ai": "google",
+      "@ai-sdk/xai": "xai",
+      "@ai-sdk/mistral": "mistral",
+      "@mistralai/mistralai": "mistral"
+    },
+    "hosts": {
+      "api.openai.com": "openai",
+      "api.anthropic.com": "anthropic",
+      "generativelanguage.googleapis.com": "google",
+      "api.x.ai": "xai",
+      "api.mistral.ai": "mistral"
+    },
+    "gatewayPrefixes": {
+      "openai": "openai",
+      "anthropic": "anthropic",
+      "google": "google",
+      "xai": "xai",
+      "mistral": "mistral"
+    }
+  },
+  "modelConstructors": ["gateway", "gateway.languageModel"],
+  "testCases": ["engine/test/evaluator.test.ts", "engine/test/loop.test.ts"]
+}

@@ -1,0 +1,74 @@
+// engine/src/scan.ts
+import ts from 'typescript';
+import type { AgreementSnapshot } from './agreement/ingest.ts';
+import { EVALUATOR_VERSION, evaluate, type EvaluationOutput } from './evaluator/evaluate.ts';
+import { verifyObligation, type Obligation } from './obligation/obligation.ts';
+import type { PolicyCard } from './policy/card.ts';
+import { hashOf } from './schema/hashing.ts';
+import type { ResultBody } from './schema/types.ts';
+import { takeSnapshot } from './snapshot/snapshot.ts';
+
+export class ObligationNotActiveError extends Error {}
+
+export interface ScanInput {
+  repoPath: string;
+  card: PolicyCard;
+  cardHash: string;
+  agreement: AgreementSnapshot;
+  obligation: Obligation;
+}
+
+export async function runScan(
+  input: ScanInput,
+  evaluateFn: typeof evaluate = evaluate, // test-only seam: lets tests inject an evaluator failure
+): Promise<{ body: ResultBody; resultHash: string; diagnostics: string[] }> {
+  const { card, cardHash, agreement, obligation } = input;
+  verifyObligation(obligation);
+  if (obligation.policyCardId !== card.id || obligation.policyCardVersion !== card.version) {
+    throw new Error('obligation was confirmed against a different policy card or version');
+  }
+  if (obligation.agreementTextSha256 !== agreement.textSha256) {
+    throw new Error('obligation does not match the supplied agreement');
+  }
+  if (obligation.applicability !== 'applies' && obligation.applicability !== 'not-applicable') {
+    throw new ObligationNotActiveError(
+      `obligation applicability is "${obligation.applicability}"; a scan needs a human decision of "applies" or "not-applicable"`,
+    );
+  }
+
+  const snapshot = await takeSnapshot(input.repoPath, { skipDirs: card.exclusions.dirs });
+  let outcome: EvaluationOutput;
+  const diagnostics: string[] = [];
+  if (obligation.applicability === 'not-applicable') {
+    outcome = { state: 'not-applicable', findings: [], unknownFiles: [], filesEvaluated: 0, notes: ['human-recorded-not-applicable'] };
+  } else {
+    try {
+      outcome = evaluateFn({ snapshot, card, allowlist: obligation.allowlist });
+    } catch (e) {
+      diagnostics.push(String(e));
+      outcome = { state: 'error', findings: [], unknownFiles: [], filesEvaluated: 0, notes: ['evaluator-exception'] };
+    }
+  }
+
+  const body: ResultBody = {
+    schemaVersion: '1',
+    ruleId: card.id,
+    ruleVersion: card.version,
+    // The TypeScript version decides parse verdicts, so it is part of the evaluator identity.
+    evaluatorVersion: `${EVALUATOR_VERSION}+typescript-${ts.version}`,
+    policyCardHash: cardHash,
+    treeHash: snapshot.treeHash,
+    agreementHash: agreement.textSha256,
+    obligationHash: obligation.id,
+    state: outcome.state,
+    findings: outcome.findings,
+    unknownFiles: outcome.unknownFiles,
+    filesEvaluated: outcome.filesEvaluated,
+    // The snapshot always skips .git at any depth, so every report lists it alongside the card's exclusions.
+    exclusions: [
+      ...new Set([...['.git', ...card.exclusions.dirs].map((d) => `dir:${d}`), ...card.exclusions.files.map((f) => `file:${f}`)]),
+    ].sort(),
+    notes: outcome.notes,
+  };
+  return { body, resultHash: hashOf(body), diagnostics };
+}

@@ -1,26 +1,78 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-doc);
+
+  --color-desk: #dfe4ec;
+  --color-panel: #f6f7fa;
+  --color-paper: #fdfdfc;
+  --color-ink: #17202e;
+  --color-muted: #566074;
+  --color-faint: #8b95a7;
+  --color-rule: #c9d0db;
+  --color-cobalt: #2d3fa6;
+  --color-cobalt-soft: #dde2f7;
+
+  --color-gap: #a3231b;
+  --color-gap-tint: #fbd9d5;
+  --color-evidence: #7a5200;
+  --color-evidence-tint: #fdebb5;
+  --color-legal: #4a2d9c;
+  --color-legal-tint: #e4dafb;
+  --color-clear: #1b6b3e;
+  --color-clear-tint: #d0eddc;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background: var(--color-desk);
+  color: var(--color-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-cobalt);
+  outline-offset: 2px;
+}
+
+/* A finding row flashes like a highlighter stroke when it appears or changes status, then fades. */
+@keyframes marker {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  30% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+.finding-row {
+  position: relative;
+  isolation: isolate;
+}
+
+.finding-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--marker);
+  transform-origin: left;
+  animation: marker 1500ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finding-row::before {
+    animation: none;
+    opacity: 0;
+  }
 }
