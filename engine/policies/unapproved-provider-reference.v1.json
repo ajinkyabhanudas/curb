@@ -5,7 +5,7 @@
   "owner": "unassigned (to be named by the product owner)",
   "reviewDate": "2026-10-13",
   "severity": "high",
-  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal, gateway model identifier passed to a declared model constructor, or model-identifier literal anywhere in scanned source (a whole string of the form <prefix>/<model> whose model part contains a digit or hyphen, for example \"openai/gpt-5\") or the string value of a provider-named property (provider, providerId, provider_id or any key ending in _provider) that is a registered provider id, that resolves to a registered provider outside the customer's allowlist is a finding.",
+  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal, gateway model identifier passed to a declared model constructor, or model-identifier literal anywhere in scanned source (a whole string of the form <prefix>/<model> whose model part contains a digit or hyphen, for example \"openai/gpt-5\") or a string value assigned to a provider-named target (a property, class field, JSX attribute, default parameter or assignment target whose name ends in provider or providerId, ignoring case and separators, for example provider, modelProvider, LLM_PROVIDER or llm-provider) that is a registered provider id, that resolves to a registered provider outside the customer's allowlist is a finding.",
   "approvedTextPatterns": [
     "Provider will route Customer Content for model inference only to the following model providers: <list>."
   ],
@@ -23,7 +23,7 @@
     "A symlink yields unknown whatever its name; a file that is too large or unreadable yields unknown unless its type is never scanned"
   ],
   "falsePositiveExamples": [
-    "A provider-named property that is a login method, not a data recipient, for example signInWithOAuth({ provider: \"google\" }), or a provider id in a test fixture",
+    "A provider-named target that is a login method or a UI choice, not a data recipient, for example signInWithOAuth({ provider: \"google\" }), <AuthButton provider=\"azure\" /> or authProvider: \"google\", or a provider id in a test fixture",
     "A provider import in a test-only file that never ships",
     "A provider referenced in code that is never executed"
   ],
@@ -48,11 +48,11 @@
     "Test mocks such as vi.mock('openai') and jest.mock('openai')",
     "A TypeScript path alias or bundler alias that rewrites a package to another name",
     ".git directories are skipped at every depth, so source placed inside any directory named .git is not scanned",
-    "Provider names held as bare strings are examined only as the value of a provider-named property (provider, providerId, provider_id, *_provider); provider-name arrays such as gatewayOrder: ['fireworks', 'bedrock'], providerOptions keys, display-name maps such as { openai: 'OpenAI' }, shorthand { provider } and values read from variables are not examined",
+    "Provider names held as bare strings are examined only when assigned to a name ending in provider or providerId (through as, satisfies, parentheses, !, <const>, ??, || and && or the branches of a ternary). Not examined: provider-name arrays such as gatewayOrder: ['fireworks', 'bedrock'], providerOptions keys, display-name maps such as { openai: 'OpenAI' }, shorthand { provider }, values read from variables or built by concatenation or substitution, comparisons (kind === 'groq'), switch cases, enum values, and names that do not end in provider (vendor, backend, llm)",
     "Model-identifier literals whose model part (slug) is without a digit or hyphen (for example 'openai/chatgpt') are not flagged; this keeps paths such as google/fonts and meta/robots out",
     "Model-identifier literals for providers not in the registry (a prefix missing from registry.gatewayPrefixes) are not flagged",
     "Object keys, interface member names, destructuring keys and computed keys that hold a model identifier are not flagged",
-    "Bare model ids without a provider prefix (llama3-8b-8192) are never mapped to a provider. A catalog file is marked unknown only at 6 or more such values making up 20% or more of its string literals, so a short catalog or one buried among many other strings is neither flagged nor marked; the thresholds rest on a single real repository",
+    "Bare model ids without a provider prefix (llama3-8b-8192) are never mapped to a provider. A catalog file is marked unknown only at 6 or more such values from the listed model families making up 20% or more of its string values (keys, type literals and module specifiers are not counted), so a catalog split into files of 5 or fewer ids, one padded with other strings, one of an unlisted family, or one with built or uppercase ids is neither flagged nor marked, and a formatting change alone can move a file across the threshold. The thresholds rest on a single real repository. A catalog that lists only allowed models is still marked unknown",
     "The Vercel AI Gateway host (ai-gateway.vercel.sh) is a proxy, not a provider: URLs to it are not flagged, and the provider it routes to is decided at runtime",
     "OpenRouter (openrouter.ai) is registered as its own provider id because it receives the request content: an allowlist must include openrouter to permit it. The providers it then routes to are decided at runtime and are not visible to the scan",
     "Hosts not verified against vendor documentation are not in the registry. api.together.xyz is the default in some third-party integrations while Together's own docs give api.together.ai; api.moonshot.cn was found only on third-party pages. Azure and Bedrock hosts are per-region subdomains and cannot be matched because host matching is exact"

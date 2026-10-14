@@ -62,11 +62,14 @@ describe('policy card', () => {
 
   it('1.3.0 describes provider property values and catalog files, and discloses their limits', async () => {
     const { card } = await loadCard(CARD_PATH);
-    expect(card.interpretation).toMatch(/provider-named property/);
+    expect(card.interpretation).toMatch(/provider-named target/);
     expect(card.prerequisites.join('\n')).toMatch(/catalog/);
     expect(card.falsePositiveExamples.join('\n')).toMatch(/signInWithOAuth/);
     const risks = card.falseNegativeRisks.join('\n');
     expect(risks).toMatch(/shorthand \{ provider \}/);
+    expect(risks).toMatch(/comparisons/);
+    expect(risks).toMatch(/formatting change alone/);
+    expect(card.falsePositiveExamples.join('\n')).toMatch(/AuthButton/);
     expect(risks).toMatch(/Bare model ids without a provider prefix/);
     expect(risks).toMatch(/single real repository/);
   });

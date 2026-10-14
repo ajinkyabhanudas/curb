@@ -29,10 +29,12 @@ export const IGNORABLE_EXT = new Set(
 const MAX_LINE_LENGTH = 1000;
 // A file is minified when more than this share of its bytes sits in lines longer than MAX_LINE_LENGTH.
 const MINIFIED_LONG_LINE_SHARE = 0.5;
-// A property whose value names a provider: `provider: "groq"`, `providerId`, `provider_id`, `embeddings_provider`.
-const PROVIDER_KEY = /^(provider|providerId|provider_id)$|_provider$/;
+// A name that says it holds a provider: `provider`, `providerId`, `provider_id`, `embeddings_provider`, `modelProvider`,
+// `LLM_PROVIDER`, `llm-provider`. Compared after lowercasing and dropping every non-alphanumeric character.
+const PROVIDER_KEY = /provider(id)?$/;
 // A bare model id from a known family, with no provider prefix (`llama3-8b-8192`). A digit or hyphen is required.
-const MODEL_FAMILIES = 'gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|codestral|command-r|deepseek|qwen|sonar|grok-|o1|o3|gemma|pplx-';
+const MODEL_FAMILIES =
+  'gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|open-mixtral|codestral|pixtral|ministral|magistral|command-r|deepseek|qwen|sonar|grok-|o[1-9]|gemma|phi-|pplx-|kimi-|glm-|whisper-|dall-e-|text-embedding-';
 const BARE_MODEL_ID = new RegExp(`^(${MODEL_FAMILIES})[a-z0-9._:-]*$`);
 // Global, for counting quoted candidates with String.prototype.match before the file is parsed.
 const BARE_MODEL_ID_QUOTED = new RegExp(`["'\`](?:${MODEL_FAMILIES})`, 'g');
@@ -243,9 +245,10 @@ export function looksLikeCatalog(filePath: string, content: string): boolean {
         ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) ||
         ts.isExternalModuleReference(parent) ||
         (ts.isCallExpression(parent) && parent.arguments[0] === node && /^(require|import)$/.test(parent.expression.getText(sf)));
-      if (!isSpecifier) {
+      // Keys and type literals are names, not values: they count towards neither side of the share.
+      if (!isSpecifier && !isPropertyName(node) && !ts.isLiteralTypeNode(parent)) {
         strings++;
-        if (!isPropertyName(node) && !ts.isLiteralTypeNode(parent) && BARE_MODEL_ID.test(node.text) && /[0-9-]/.test(node.text)) ids++;
+        if (BARE_MODEL_ID.test(node.text) && /[0-9-]/.test(node.text)) ids++;
       }
     }
     ts.forEachChild(node, visit);
@@ -254,17 +257,39 @@ export function looksLikeCatalog(filePath: string, content: string): boolean {
   return ids >= CATALOG_MIN_IDS && ids / strings >= CATALOG_MIN_SHARE;
 }
 
-// The literal is the value of a provider-named property, looking through `as`, `satisfies` and parentheses.
+const isProviderName = (name: string): boolean => PROVIDER_KEY.test(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+function nameText(name: ts.Node): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteral(name.expression)) return name.expression.text;
+  return undefined;
+}
+
+// The literal is the value of a provider-named property, class field, JSX attribute, default parameter or assignment
+// target. Wrappers that keep the value are looked through: `as`, `satisfies`, parentheses, `!`, <const>, `??`, `||`,
+// `&&` and the branches of a ternary.
 function isProviderPropertyValue(node: ts.Node): boolean {
+  const passes = [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken];
   let child: ts.Node = node;
   let parent = node.parent;
-  while (ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent) || ts.isParenthesizedExpression(parent)) {
+  while (
+    ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent) || ts.isParenthesizedExpression(parent) ||
+    ts.isNonNullExpression(parent) || ts.isTypeAssertionExpression(parent) || ts.isJsxExpression(parent) ||
+    (ts.isBinaryExpression(parent) && passes.includes(parent.operatorToken.kind)) ||
+    (ts.isConditionalExpression(parent) && parent.condition !== child)
+  ) {
     child = parent;
     parent = parent.parent;
   }
-  if (!ts.isPropertyAssignment(parent) || parent.initializer !== child) return false;
-  const name = parent.name;
-  return (ts.isIdentifier(name) || ts.isStringLiteral(name)) && PROVIDER_KEY.test(name.text);
+  let name: string | undefined;
+  if ((ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.initializer === child) name = nameText(parent.name);
+  else if (ts.isBindingElement(parent) && parent.initializer === child) name = nameText(parent.name);
+  else if (ts.isJsxAttribute(parent) && parent.initializer === child) name = nameText(parent.name);
+  else if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === child) {
+    const left = parent.left;
+    name = ts.isPropertyAccessExpression(left) ? nameText(left.name) : ts.isIdentifier(left) ? left.text : undefined;
+  }
+  return name !== undefined && isProviderName(name);
 }
 
 export function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {

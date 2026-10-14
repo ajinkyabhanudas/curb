@@ -758,6 +758,58 @@ describe('evaluate: provider property values (CURB-19, rule A)', () => {
     expect(out.state).toBe('pass');
   });
 
+  it('flags camel-case, hyphenated and upper-case provider keys (review: modelProvider, llm-provider)', async () => {
+    const out = await run({
+      'a.ts': [
+        'export const a = { modelProvider: "openai", "llm-provider": "groq", LLM_PROVIDER: "mistral", Provider: "cohere" };',
+        'export const b = { providerName: "deepseek", providers: "perplexity" };',
+        '',
+      ].join('\n'),
+    });
+    expect(ids(out)).toEqual(['openai', 'groq', 'mistral', 'cohere']);
+  });
+
+  it('flags the value through ??, ||, && and ternaries, <const> and !', async () => {
+    const out = await run({
+      'a.ts': [
+        'export const a = { provider: env.P ?? "groq" };',
+        'export const b = { provider: env.P || "openai" };',
+        'export const c = { provider: ok ? "mistral" : "cohere" };',
+        'export const d = { provider: <const>"deepseek" };',
+        'export const e = { provider: ok && "perplexity" };',
+        '',
+      ].join('\n'),
+    });
+    expect(ids(out)).toEqual(['groq', 'openai', 'mistral', 'cohere', 'deepseek', 'perplexity']);
+  });
+
+  it('flags JSX attributes, class fields, assignments, default parameters and computed string keys', async () => {
+    const out = await run({
+      'ui.tsx': 'export const A = () => <Chat provider="groq" />; export const B = () => <Chat provider={"openai"} />;\n',
+      'c.ts': [
+        'class C { provider = "mistral"; }',
+        'cfg.provider = "cohere";',
+        'function f({ provider = "deepseek" }) { return provider; }',
+        'export const d = { ["provider"]: "perplexity" };',
+        '',
+      ].join('\n'),
+    });
+    expect(ids(out)).toEqual(['mistral', 'cohere', 'deepseek', 'perplexity', 'groq', 'openai']);
+  });
+
+  it('still ignores comparisons, enums, unrelated attributes and a condition that is merely a string', async () => {
+    const out = await run({
+      'a.tsx': [
+        'if (kind === "groq") run();',
+        'enum E { Groq = "groq" }',
+        'export const x = <Chat label="groq" />;',
+        'export const y = { provider: "groq" === kind ? other : none };',
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+  });
+
   it('flags an OAuth login object too; the card discloses this as a known false positive', async () => {
     const out = await run({ 'login.ts': 'signInWithOAuth({ provider: "google" });\n' });
     expect(ids(out)).toEqual(['google']);
@@ -802,10 +854,39 @@ describe('evaluate: catalog-shaped files are unknown (CURB-19, rule B)', () => {
     expect(out.state).toBe('pass');
   });
 
-  it('does not treat CSS class names starting with command- as model ids', async () => {
+  it('counts command-r ids but not command- class names', async () => {
     const cls = Array.from({ length: 10 }, (_, i) => `export const c${i} = "command-item-${i}";`).join('\n');
-    const out = await run({ 'ui.ts': `${cls}\n` });
-    expect(out.unknownFiles).toEqual([]);
+    const notCatalog = await run({ 'ui.ts': `${cls}\n` });
+    expect(notCatalog.unknownFiles).toEqual([]);
+    const ids = ['command-r', 'command-r-plus', 'command-r-08-2024', 'command-r7b-12-2024', 'command-r-plus-04-2024', 'command-r-03-2024'];
+    const catalogLike = await run({ 'cohere.ts': catalog(ids) });
+    expect(catalogLike.unknownFiles).toEqual([{ path: 'cohere.ts', reason: 'catalog' }]);
+  });
+
+  it('still marks a catalog written with quoted keys (JSON-style), where keys must not dilute the share (review)', async () => {
+    const quoted = (ids: string[]) =>
+      ['export const LIST = [', ...ids.map((id, i) => `  { "id": "${id}", "name": "Model ${i}", "link": "https://x.test/${i}" },`), '];', ''].join('\n');
+    const out = await run({ 'quoted.ts': quoted(eight) });
+    expect(out.unknownFiles).toEqual([{ path: 'quoted.ts', reason: 'catalog' }]);
+  });
+
+  it('draws the line at exactly 6 ids and exactly 20% of string literals', async () => {
+    const six = ['gpt-4', 'gpt-4o', 'claude-3-opus', 'claude-3-haiku', 'gemini-pro', 'llama3-8b'];
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `export const f${i} = "label ${i}";`).join('\n');
+    const src = (ids: string[], n: number) => `${ids.map((m, i) => `export const m${i} = "${m}";`).join('\n')}\n${filler(n)}\n`;
+    const out = await run({
+      'edge-20.ts': src(six, 24), // 6 / 30 = 0.20 -> catalog
+      'under-20.ts': src(six, 25), // 6 / 31 < 0.20 -> not catalog
+      'five.ts': src(six.slice(0, 5), 0), // 5 ids -> not catalog
+    });
+    expect(out.unknownFiles).toEqual([{ path: 'edge-20.ts', reason: 'catalog' }]);
+  });
+
+  it('knows the newer model families (o4, embeddings, whisper, dall-e, phi, kimi, glm, pixtral)', async () => {
+    const out = await run({
+      'newer.ts': catalog(['o4-mini', 'text-embedding-3-small', 'whisper-1', 'dall-e-3', 'phi-3-mini', 'kimi-k2', 'glm-4', 'pixtral-12b']),
+    });
+    expect(out.unknownFiles).toEqual([{ path: 'newer.ts', reason: 'catalog' }]);
   });
 });
 
