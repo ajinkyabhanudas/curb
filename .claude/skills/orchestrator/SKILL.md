@@ -18,7 +18,7 @@ Read `docs/workflow/profile.md`. It holds this repo's facts: tracker, check comm
 | Size | Looks like | Path |
 |---|---|---|
 | Trivial | Typo, one-file doc edit, read-only question | Do it. Run the checks if code changed. Stop here. |
-| Bounded | Small change to code that already exists | `superpowers:brainstorming` (short design in chat, wait for a yes), then test-first. |
+| Bounded | Small change to code that already exists | `superpowers:brainstorming` (short design in chat, wait for a yes), then test-first. Under a high-risk path: `feature-dev:code-explorer` first (gate 2). |
 | Multi-file | Several files, existing patterns, no new interface | `feature-dev:code-explorer`, `feature-dev:code-architect`, then test-first. |
 | Architectural | New subsystem, new interface, change to a schema or a high-risk path | `superpowers:brainstorming` (written spec, approval), argue the opposite case once, `superpowers:writing-plans`, `superpowers:subagent-driven-development`. |
 | Defect | Failing test, wrong output | `superpowers:systematic-debugging`. Cause first. No patch-and-retry. |
