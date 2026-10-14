@@ -6,17 +6,26 @@ import { compareStrings as compare, findingId } from '../schema/hashing.ts';
 import type { Finding, ResultState, UnknownFile, UnknownReason } from '../schema/types.ts';
 import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 
-export const EVALUATOR_VERSION = '0.1.0';
+// Bump on any change to what is flagged or reported unknown: diff refuses to compare results across versions.
+export const EVALUATOR_VERSION = '0.2.0';
 
+// Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned.
+// Every other extension is `unsupported-language`, so a language nobody listed can never read as a pass.
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts']);
-const OTHER_LANG_EXT = new Set([
-  '.py', '.go', '.rs', '.java', '.rb', '.php', '.cs', '.kt', '.swift',
-  // formats that embed JS/TS, and other languages that may call a provider
-  '.vue', '.svelte', '.astro', '.mdx', '.html', '.htm', '.ipynb',
-  '.c', '.cc', '.cpp', '.h', '.hpp', '.scala', '.dart', '.ex', '.exs',
-  '.sh', '.bash', '.zsh', '.lua', '.pl', '.r', '.jl', '.clj', '.m', '.mm',
-]);
+export const IGNORABLE_EXT = new Set(
+  [
+    'md', 'markdown', 'txt', 'rst', 'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'lock', 'log',
+    'csv', 'tsv', 'xml', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'bmp', 'tiff', 'woff', 'woff2',
+    'ttf', 'otf', 'eot', 'pdf', 'zip', 'gz', 'tar', 'tgz', 'map', 'css', 'scss', 'sass', 'less', 'sql', 'graphql',
+    'gql', 'prisma',
+    // suffix-like extensions, as in .env.local or config.example
+    'local', 'example', 'sample', 'template', 'dist',
+  ].map((e) => `.${e}`),
+);
 const MAX_LINE_LENGTH = 1000;
+// Any `scheme://` literal is a candidate URL; new URL() then decides whether it has a hostname.
+const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const TEMPLATE_HOST_HEAD = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+[/?#]/i;
 
 export interface EvaluationInput {
   snapshot: Snapshot;
@@ -32,7 +41,10 @@ export interface EvaluationOutput {
   notes: string[];
 }
 
-export function evaluate({ snapshot, card, allowlist }: EvaluationInput): EvaluationOutput {
+export function evaluate(
+  { snapshot, card, allowlist }: EvaluationInput,
+  scanFileFn: typeof scanFile = scanFile, // test-only seam: lets tests make one file's scan throw
+): EvaluationOutput {
   const findings = new Map<string, Finding>();
   const unknownFiles: UnknownFile[] = [];
   let filesEvaluated = 0;
@@ -40,25 +52,25 @@ export function evaluate({ snapshot, card, allowlist }: EvaluationInput): Evalua
   for (const file of snapshot.files) {
     if (isExcluded(file.path, card)) continue;
     const ext = path.posix.extname(file.path).toLowerCase();
-    const nonOk = nonOkReason(file, ext);
-    if (nonOk) {
-      unknownFiles.push({ path: file.path, reason: nonOk });
+    const skip = classify(file, ext);
+    if (skip === 'ignore') continue;
+    if (skip) {
+      unknownFiles.push({ path: file.path, reason: skip });
       continue;
     }
-    if ((ext === '' && file.content?.startsWith('#!')) || OTHER_LANG_EXT.has(ext)) {
-      unknownFiles.push({ path: file.path, reason: 'unsupported-language' });
-      continue;
+    // One file that breaks the parser or the walk becomes unknown for that file; it never zeroes out the repo.
+    try {
+      const problem = fileProblem(file);
+      if (problem) {
+        unknownFiles.push({ path: file.path, reason: problem });
+        continue;
+      }
+      const found = scanFileFn(file.path, file.sha256 as string, file.content as string, card, allowlist);
+      for (const finding of found) findings.set(finding.id, finding);
+      filesEvaluated++;
+    } catch {
+      unknownFiles.push({ path: file.path, reason: 'parse-error' });
     }
-    if (!SOURCE_EXT.has(ext)) continue;
-    const problem = fileProblem(file);
-    if (problem) {
-      unknownFiles.push({ path: file.path, reason: problem });
-      continue;
-    }
-    for (const finding of scanFile(file.path, file.sha256 as string, file.content as string, card, allowlist)) {
-      findings.set(finding.id, finding);
-    }
-    filesEvaluated++;
   }
 
   const sorted = [...findings.values()].sort(
@@ -85,14 +97,19 @@ function isExcluded(filePath: string, card: PolicyCard): boolean {
   return card.exclusions.files.includes(base) || segments.slice(0, -1).some((s) => card.exclusions.dirs.includes(s));
 }
 
-// Entries the snapshot could not read as text are unknown whatever their extension; a symlink
-// or oversized file can hide source. Binaries only matter when they carry a source extension.
-function nonOkReason(file: SnapshotFile, ext: string): UnknownReason | undefined {
-  if (file.status === 'ok') return undefined;
+/**
+ * Decide what happens to a snapshot entry before analysis: 'ignore', an unknown reason, or undefined (analyze it).
+ * A symlink can hide source whatever its name, so it is always unknown. Ignorable types are never analyzed, so their
+ * size or readability does not matter. Binary content is only a problem under a source extension.
+ */
+function classify(file: SnapshotFile, ext: string): UnknownReason | 'ignore' | undefined {
   if (file.status === 'symlink') return 'symlink';
+  if (IGNORABLE_EXT.has(ext)) return 'ignore';
+  if (file.status === 'binary') return SOURCE_EXT.has(ext) ? 'unreadable' : 'ignore';
   if (file.status === 'too-large') return 'too-large';
-  if (file.status === 'binary') return SOURCE_EXT.has(ext) || OTHER_LANG_EXT.has(ext) ? 'unreadable' : undefined;
-  return 'unreadable';
+  if (file.status !== 'ok') return 'unreadable';
+  if (ext === '') return file.content?.replace(/^\uFEFF/, '').startsWith('#!') ? 'unsupported-language' : 'ignore';
+  return SOURCE_EXT.has(ext) ? undefined : 'unsupported-language';
 }
 
 function fileProblem(file: SnapshotFile): UnknownReason | undefined {
@@ -114,9 +131,15 @@ function looksGenerated(content: string): boolean {
     .some((l) => /@generated|auto-?generated|do not edit/i.test(l));
 }
 
+// transpileModule cannot emit a declaration file (it throws "Output generation failed"), so declaration
+// files are checked under the matching non-declaration name; syntax rules are the same for both.
+function diagnosticsName(filePath: string): string {
+  return filePath.replace(/\.d(\.[^./]+)?\.([mc]?ts)$/i, '$1.$2');
+}
+
 function hasParseError(filePath: string, content: string): boolean {
   const out = ts.transpileModule(content, {
-    fileName: filePath,
+    fileName: diagnosticsName(filePath),
     reportDiagnostics: true,
     compilerOptions: { jsx: ts.JsxEmit.Preserve, target: ts.ScriptTarget.ESNext, allowJs: true },
   });
@@ -135,7 +158,7 @@ function calleeName(node: ts.Expression): string | undefined {
   return undefined;
 }
 
-function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {
+export function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {
   const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.ESNext, true);
   const lineStarts = sf.getLineStarts();
   const out: Finding[] = [];
@@ -148,9 +171,9 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
   }
 
   function hostProvider(text: string): string | undefined {
-    if (!/^https?:\/\//i.test(text)) return undefined;
+    if (!SCHEME.test(text)) return undefined;
     try {
-      return own(card.registry.hosts, new URL(text).hostname.toLowerCase());
+      return own(card.registry.hosts, new URL(text).hostname.toLowerCase().replace(/\.$/, ''));
     } catch {
       return undefined;
     }
@@ -158,7 +181,7 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
 
   function gatewayProvider(text: string): string | undefined {
     const slash = text.indexOf('/');
-    return slash > 0 ? own(card.registry.gatewayPrefixes, text.slice(0, slash)) : undefined;
+    return slash > 0 ? own(card.registry.gatewayPrefixes, text.slice(0, slash).toLowerCase()) : undefined;
   }
 
   function check(node: ts.Node, text: string, providerId: string | undefined, what: string) {
@@ -195,21 +218,28 @@ function scanFile(filePath: string, fileSha: string, content: string, card: Poli
     } else if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const arg = node.arguments[0];
-      const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
+      const name = calleeName(callee);
+      const isRequire = name === 'require' || name === 'require.resolve';
       if (isLiteral(arg) && (isRequire || callee.kind === ts.SyntaxKind.ImportKeyword)) {
         check(arg, arg.text, packageProvider(arg.text), 'load of package');
-      } else if (card.modelConstructors.includes(calleeName(callee) ?? '')) {
+      } else if (card.modelConstructors.includes(name ?? '')) {
         // Only the template head is known; a prefix must be fully inside it (`openai/${m}`).
         const text = isLiteral(arg) ? arg.text : arg && ts.isTemplateExpression(arg) ? arg.head.text : undefined;
         if (text !== undefined && arg) check(arg, text, gatewayProvider(text), 'model identifier');
       }
     }
+    // typeof import('pkg') and import('pkg').T in type positions
+    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && isLiteral(node.argument.literal)) {
+      const lit = node.argument.literal;
+      check(lit, lit.text, packageProvider(lit.text), 'import of package');
+    }
     if (ts.isExternalModuleReference(node) && isLiteral(node.expression)) {
       check(node.expression, node.expression.text, packageProvider(node.expression.text), 'import of package');
     }
     if (isLiteral(node)) check(node, node.text, hostProvider(node.text), 'URL');
-    // A template URL counts only when the head fixes the whole host (`https://api.openai.com/${x}`).
-    else if (ts.isTemplateExpression(node) && /^https?:\/\/[^/]+\//i.test(node.head.text)) {
+    // A template URL counts only when the head fixes the whole host: it continues past the host with / ? or #
+    // (`https://api.openai.com/${x}`, `https://api.openai.com?k=${k}`).
+    else if (ts.isTemplateExpression(node) && TEMPLATE_HOST_HEAD.test(node.head.text)) {
       check(node, node.head.text, hostProvider(node.head.text), 'URL');
     }
     ts.forEachChild(node, visit);

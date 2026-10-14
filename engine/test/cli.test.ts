@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -226,5 +226,19 @@ describe('curb CLI --out, --force and --start', () => {
         ]),
       ).rejects.toMatchObject({ code: 2, stderr: expect.stringMatching(/--start/) });
     }
+  });
+});
+
+describe('curb scan on a repo with a declaration file (final review A2)', () => {
+  it('scans next-env.d.ts to a verdict with exit 0, not ERROR', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'curb-cli-'));
+    const ob = await confirmTo(dir, ['--allow', 'anthropic']);
+    const repo = await mkdtemp(path.join(tmpdir(), 'curb-dts-'));
+    await cp(path.join(ROOT, 'fixtures/repos/fixed'), repo, { recursive: true });
+    await writeFile(path.join(repo, 'next-env.d.ts'), '/// <reference types="next" />\n');
+    const { stdout } = await cli([
+      'scan', '--repo', repo, '--card', CARD_PATH, '--agreement', AGREEMENT_PATH, '--obligation', ob, '--store', dir,
+    ]);
+    expect(stdout).toMatch(/^PASS  0 finding\(s\), 0 unknown file\(s\), 3 file\(s\) evaluated/);
   });
 });

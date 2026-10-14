@@ -16,7 +16,7 @@ This report checks configured engineering evidence against one human-confirmed c
 
 **UNKNOWN**: The rule could not establish a result for the whole scope. See the unknown files and notes below; this is not a pass.
 
-Rule: `unapproved-provider-reference` v`1.0.0`. Files evaluated: 1.
+Rule: `unapproved-provider-reference` v`1.0.1`. Files evaluated: 1.
 
 ## Confirmed obligation
 
@@ -35,6 +35,7 @@ None.
 
 ## Exclusions
 
+- `dir:.git`
 - `dir:.next`
 - `dir:dist`
 - `dir:node_modules`
@@ -44,12 +45,12 @@ None.
 
 ## Inputs and hashes
 
-- Result hash: `5382941b2e8c402d930c684d90a68e72ea32f86a38300dd354ba9a31afa451e9`
+- Result hash: `523d8528b34f8f9c92b3182d497fcf66d477832cb9670f3f18178edd4a79a22d`
 - Tree hash: `2892a1cdc75fa706b206b4c9866e4d23e192236644e7acce002789d70311ab09`
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
-- Obligation id: `6dd1e295a6eb82d905b226ffb567eb6ced72259de89f42a877c42d8d1fbc520e`
-- Policy card hash: `cb93e34d4b493d8fd421ac9392b50e5f29a20c4ec867e78833ef4630978aaf4b`
-- Evaluator version: `0.1.0+typescript-5.9.3`
+- Obligation id: `a47aee5897722ecc6ecb1b1c5e1f88b7ef8abe26421d51cccb49287ad200b5c1`
+- Policy card hash: `40443c33a8fbe506502642e6b4914274bd2c4cf065acb450b348dde85b0ca5c8`
+- Evaluator version: `0.2.0+typescript-5.9.3`
 
 ## Run
 

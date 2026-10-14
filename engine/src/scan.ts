@@ -64,7 +64,10 @@ export async function runScan(
     findings: outcome.findings,
     unknownFiles: outcome.unknownFiles,
     filesEvaluated: outcome.filesEvaluated,
-    exclusions: [...card.exclusions.dirs.map((d) => `dir:${d}`), ...card.exclusions.files.map((f) => `file:${f}`)].sort(),
+    // The snapshot always skips .git at any depth, so every report lists it alongside the card's exclusions.
+    exclusions: [
+      ...new Set([...['.git', ...card.exclusions.dirs].map((d) => `dir:${d}`), ...card.exclusions.files.map((f) => `file:${f}`)]),
+    ].sort(),
     notes: outcome.notes,
   };
   return { body, resultHash: hashOf(body), diagnostics };

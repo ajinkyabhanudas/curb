@@ -2,7 +2,7 @@
 import { chmod, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { evaluate } from '../src/evaluator/evaluate.ts';
+import { IGNORABLE_EXT, evaluate, scanFile } from '../src/evaluator/evaluate.ts';
 import { loadCard, type PolicyCard } from '../src/policy/card.ts';
 import { takeSnapshot } from '../src/snapshot/snapshot.ts';
 import { CARD_PATH, makeRepo } from './helpers.ts';
@@ -264,5 +264,167 @@ describe('evaluate: evidence line and excerpt', () => {
     const f = (await run({ 'a.ts': src })).findings[0];
     expect(f.evidence.excerpt).toBe("import o from 'openai';");
     expect(f.evidence.line).toBe(3);
+  });
+});
+
+describe('evaluate: file types outside the source and ignorable sets (final review A1)', () => {
+  for (const name of ['tools/call.ps1', 'src/x.es6', 'src/x.coffee', 'build.groovy', 'TOOLS/CALL.PS1', 'src/X.COFFEE', 'a.vue', 'b.svelte']) {
+    it(`reports ${name} as unsupported-language`, async () => {
+      const out = await run({ [name]: 'Invoke-RestMethod https://api.openai.com/v1/chat\n', 'ok.ts': '1' });
+      expect(out.unknownFiles).toEqual([{ path: name, reason: 'unsupported-language' }]);
+      expect(out.state).toBe('unknown');
+    });
+  }
+
+  it('still analyzes an uppercase source extension such as .MJS', async () => {
+    const out = await run({ 'x.MJS': "import OpenAI from 'openai';\n" });
+    expect(out.state).toBe('fail');
+    expect(out.unknownFiles).toEqual([]);
+  });
+
+  const IGNORABLE = (
+    'md markdown txt rst json jsonc yaml yml toml ini cfg conf env lock log csv tsv xml svg png jpg jpeg gif webp avif ' +
+    'ico bmp tiff woff woff2 ttf otf eot pdf zip gz tar tgz map css scss sass less sql graphql gql prisma ' +
+    'local example sample template dist'
+  ).split(' ');
+  it('keeps the ignorable set exactly as ruled', () => {
+    expect([...IGNORABLE_EXT].sort()).toEqual(IGNORABLE.map((e) => `.${e}`).sort());
+  });
+
+  it('ignores every ignorable file type, whatever its content', async () => {
+    const files: Record<string, string> = { 'ok.ts': '1' };
+    for (const ext of IGNORABLE) {
+      files[`f.${ext}`] = "import OpenAI from 'openai';\n";
+      files[`G.${ext.toUpperCase()}`] = 'x';
+    }
+    const out = await run(files);
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+    expect(out.filesEvaluated).toBe(1);
+  });
+
+  it('ignores an over-cap image (1.5 MB at the default cap) and an over-cap ignorable file at a small cap', async () => {
+    const big = await makeRepo({ 'logo.png': 'p'.repeat(1_500_000), 'ok.ts': '1' });
+    const out = await runDir(big);
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+    const small = await makeRepo({ 'data.json': 'x'.repeat(50), 'ok.ts': '1' });
+    expect((await runDir(small, 10)).state).toBe('pass');
+  });
+
+  it('ignores an unreadable ignorable file', async (ctx) => {
+    if (process.getuid?.() === 0) return ctx.skip();
+    const dir = await makeRepo({ 'notes.md': 'x', 'ok.ts': '1' });
+    await chmod(path.join(dir, 'notes.md'), 0o000);
+    const out = await runDir(dir);
+    await chmod(path.join(dir, 'notes.md'), 0o644);
+    expect(out.state).toBe('pass');
+  });
+
+  it('still reports a symlink named like an image as unknown', async () => {
+    const dir = await makeRepo({ 'ok.ts': '1' });
+    await symlink('/etc/hosts', path.join(dir, 'x.png'));
+    const out = await runDir(dir);
+    expect(out.unknownFiles).toEqual([{ path: 'x.png', reason: 'symlink' }]);
+    expect(out.state).toBe('unknown');
+  });
+
+  it('ignores extensionless Makefile and LICENSE and .env.local', async () => {
+    const out = await run({ Makefile: 'all:\n\tcurl https://api.openai.com\n', LICENSE: 'MIT\n', '.env.local': 'A=1\n', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('reports an extensionless shebang script that starts with a BOM', async () => {
+    const out = await run({ deploy: '﻿#!/bin/sh\ncurl https://api.openai.com\n', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([{ path: 'deploy', reason: 'unsupported-language' }]);
+  });
+
+  it('ignores a binary file without a source extension but reports a binary source file', async () => {
+    const out = await run({ 'blob.bin': 'a\u0000b', 'a.ts': 'a\u0000b', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
+  });
+});
+
+describe('evaluate: declaration files and per-file failures (final review A2)', () => {
+  for (const ext of ['d.ts', 'd.mts', 'd.cts']) {
+    it(`evaluates a .${ext} file with a reference directive and declare module`, async () => {
+      const src = '/// <reference types="next" />\ndeclare module \'openai\' { export const y: string; }\nexport const x: number;\n';
+      const out = await run({ [`next-env.${ext}`]: src, 'ok.ts': '1' });
+      expect(out.unknownFiles).toEqual([]);
+      expect(out.state).toBe('pass');
+      expect(out.filesEvaluated).toBe(2);
+    });
+
+    it(`flags an import('openai') type in a .${ext} file`, async () => {
+      const out = await run({ [`t.${ext}`]: "export type T = import('openai').OpenAI;\n" });
+      expect(out.state).toBe('fail');
+      expect(out.findings[0].matched).toBe('openai');
+    });
+  }
+
+  it('still reports a real syntax error in a declaration file', async () => {
+    const out = await run({ 'x.d.ts': 'export const = ;\n' });
+    expect(out.unknownFiles).toEqual([{ path: 'x.d.ts', reason: 'parse-error' }]);
+  });
+
+  it('turns an exception while scanning one file into an unknown entry for that file only', async () => {
+    const snapshot = await takeSnapshot(
+      await makeRepo({ 'a.ts': "import a from 'openai';\n", 'boom.ts': 'export const b = 1;\n' }),
+      { skipDirs: card.exclusions.dirs },
+    );
+    const out = evaluate({ snapshot, card, allowlist: ['anthropic'] }, (filePath, ...rest) => {
+      if (filePath === 'boom.ts') throw new Error('Debug Failure.');
+      return scanFile(filePath, ...rest);
+    });
+    expect(out.unknownFiles).toEqual([{ path: 'boom.ts', reason: 'parse-error' }]);
+    expect(out.findings).toHaveLength(1);
+    expect(out.state).toBe('fail');
+    expect(out.filesEvaluated).toBe(1);
+  });
+});
+
+describe('evaluate: URL schemes and template heads (final review A3, A4)', () => {
+  const flags = async (src: string) => (await run({ 'a.ts': src })).state;
+
+  it('checks provider hosts under any scheme, a trailing dot and an uppercase host', async () => {
+    expect(await flags("new WebSocket('wss://api.openai.com/v1/realtime');\n")).toBe('fail');
+    expect(await flags("new WebSocket('ws://api.openai.com/v1/realtime');\n")).toBe('fail');
+    expect(await flags("x('git+ssh://api.openai.com/repo');\n")).toBe('fail');
+    expect(await flags("fetch('https://api.openai.com./v1/chat');\n")).toBe('fail');
+    expect(await flags("fetch('HTTPS://API.OPENAI.COM/v1/chat');\n")).toBe('fail');
+    expect(await flags("fetch('https://api.openai.com.evil.example/v1');\n")).toBe('pass');
+    expect(await flags("fetch('https://api.openai.com../v1');\n")).toBe('pass');
+  });
+
+  it('flags a template URL whose head fixes the host and continues with ? or #', async () => {
+    expect(await flags('fetch(`https://api.openai.com?key=${k}`);\n')).toBe('fail');
+    expect(await flags('fetch(`https://api.openai.com#${k}`);\n')).toBe('fail');
+    expect(await flags('new WebSocket(`wss://api.openai.com/v1/${p}`);\n')).toBe('fail');
+  });
+
+  it('leaves heads with an incomplete host unflagged', async () => {
+    expect(await flags('fetch(`https://api.openai.com${p}`);\n')).toBe('pass');
+    expect(await flags('fetch(`https://${h}/`);\n')).toBe('pass');
+    expect(await flags('fetch(`https://api.openai.com:${port}/v1`);\n')).toBe('pass');
+  });
+});
+
+describe('evaluate: require.resolve, import types and gateway case (final review A5)', () => {
+  it('flags require.resolve of a provider package', async () => {
+    const out = await run({ 'a.js': "const p = require.resolve('openai/package.json');\n" });
+    expect(out.state).toBe('fail');
+    expect(out.findings[0].matched).toBe('openai/package.json');
+  });
+
+  it('flags typeof import() and import().T type nodes', async () => {
+    expect((await run({ 'a.ts': "type A = typeof import('@ai-sdk/openai');\n" })).state).toBe('fail');
+    expect((await run({ 'a.ts': "let c: import('openai').OpenAI;\n" })).state).toBe('fail');
+    expect((await run({ 'a.ts': "type A = typeof import('@ai-sdk/anthropic');\n" })).state).toBe('pass');
+  });
+
+  it('compares gateway prefixes case-insensitively', async () => {
+    expect((await run({ 'a.ts': "gateway('OpenAI/gpt-5');\n" })).state).toBe('fail');
+    expect((await run({ 'a.ts': "gateway('ANTHROPIC/claude');\n" })).state).toBe('pass');
   });
 });

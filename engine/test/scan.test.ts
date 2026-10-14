@@ -242,3 +242,20 @@ describe('diagnostics, exit codes and determinism', () => {
     expect(b.envelope.operator).toBe('someone-else');
   });
 });
+
+describe('.git in the report exclusions (final review A7)', () => {
+  it('lists dir:.git and never analyzes a source file under a nested .git directory', async () => {
+    const deps = await fixtureDeps();
+    const confirmed = await confirmFixture(deps);
+    const repoPath = await makeRepo({
+      'ok.ts': 'export const a = 1;\n',
+      'sub/.git/hooks/x.ts': "import o from 'openai';\n",
+      '.git/y.ts': "import o from 'openai';\n",
+    });
+    const file = await scanAndRecord(deps, { repoPath, ...confirmed });
+    expect(file.body.exclusions).toContain('dir:.git');
+    expect(file.body.exclusions).toEqual([...file.body.exclusions].sort());
+    expect(file.body.state).toBe('pass');
+    expect(file.body.filesEvaluated).toBe(1);
+  });
+});

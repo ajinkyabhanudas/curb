@@ -1,6 +1,6 @@
 {
   "id": "unapproved-provider-reference",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "status": "draft, pending counsel approval",
   "owner": "unassigned (to be named by the product owner)",
   "reviewDate": "2026-10-13",
@@ -16,7 +16,10 @@
   "prerequisites": [
     "Source is TypeScript or JavaScript",
     "Files are readable, under the size cap and not minified or generated",
-    "Only the listed TypeScript and JavaScript extensions are analyzed; files in the unsupported-language list yield unknown"
+    "Only files with a TypeScript or JavaScript extension (.ts .tsx .js .jsx .mjs .cjs .mts .cts) are analyzed",
+    "These non-code file types are never scanned: .md .markdown .txt .rst .json .jsonc .yaml .yml .toml .ini .cfg .conf .env .lock .log .csv .tsv .xml .svg .png .jpg .jpeg .gif .webp .avif .ico .bmp .tiff .woff .woff2 .ttf .otf .eot .pdf .zip .gz .tar .tgz .map .css .scss .sass .less .sql .graphql .gql .prisma, and the suffix-like extensions .local .example .sample .template .dist",
+    "Every other file type yields unknown (unsupported-language), as does an extensionless file starting with #!; other extensionless files are not scanned",
+    "A symlink yields unknown whatever its name; a file that is too large or unreadable yields unknown unless its type is never scanned"
   ],
   "falsePositiveExamples": [
     "A provider import in a test-only file that never ships",
@@ -34,7 +37,15 @@
     "Model identifiers passed anywhere other than the first string-literal argument of a declared constructor, for example generateText({ model: 'openai/gpt-5' })",
     "Aliased constructors (const g = gateway), element access (gateway['languageModel']) and createGateway()('x')",
     "Files whose extension is not TypeScript or JavaScript: the embedding formats reported unknown are covered, but .md, .json, .yaml and .env files are not scanned",
-    "Exclusion directories are matched by name at any depth, so a directory named like an exclusion is skipped wherever it sits"
+    "Exclusion directories are matched by name at any depth, so a directory named like an exclusion is skipped wherever it sits",
+    "Code inside a never-scanned file type (for example a provider URL in .sql, .graphql or a config file) is not flagged",
+    "Binary content is not analyzed; a file with a NUL byte near its start is ignored unless it has a TypeScript or JavaScript extension",
+    "createRequire(...)('openai') and other loaders reached through a created require function",
+    "declare module 'openai' blocks in declaration files",
+    "Tagged-template constructor calls such as gateway`openai/gpt-5`",
+    "Test mocks such as vi.mock('openai') and jest.mock('openai')",
+    "A TypeScript path alias or bundler alias that rewrites a package to another name",
+    ".git directories are skipped at every depth, so source placed inside any directory named .git is not scanned"
   ],
   "evidenceBoundaries": [
     "Findings show where source references a provider, not where traffic goes at runtime"
