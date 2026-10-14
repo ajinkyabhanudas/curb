@@ -2,7 +2,7 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` version 1.2.0, evaluator 0.3.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.2.0, evaluator 0.4.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:ae3ea37c9196c7ba9a5b8577a04df1af55e7872b538c96848ef2d17113fa5e97
+result sha256:5adb537fc1fd0fe528b097d3efabc05bcf7b099f0b8702465ebf5e44dacedf97
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:b1fccc631ce5c2dda680e5a918799df492b7f81e10882a34c4c254cdbfccc530
+result sha256:fa135f52d6b49aeac804f49974353a941da5e4f03cffa060c46a821abdfea8f1
 ```
 
 4. Diff the two runs:
@@ -197,7 +197,7 @@ Which files are looked at:
 - Every other extension (`.py`, `.ps1`, `.coffee`, `.vue`, `.svelte`, ...) makes the file `unknown` (`unsupported-language`, or `unreadable` if its content is binary), so an unlisted language can never read as a pass. An extensionless file is `unknown` only if it starts with `#!` (after an optional BOM); `Makefile`, `LICENSE` and dotfiles such as `.env` are skipped.
 - Binary content (a NUL byte in the first 8 KiB, which includes UTF-16 text) is never analyzed. It is skipped for never-scanned types and for files with no extension; under any other extension (`.ts`, `.sh`, `.py`, `.ps1`, ...) the file is `unknown` (`unreadable`), because it may be a script. An extensionless file over the size cap is `unknown` (`too-large`) since it is never read; this is deliberately conservative.
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
-- A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
+- A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. In a `.tsx` or `.jsx` file, single-line JSX attribute strings (such as SVG `d="..."` path data) do not count towards that share, so a small icon component is evaluated; every other string still counts. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
 
 A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.2.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
