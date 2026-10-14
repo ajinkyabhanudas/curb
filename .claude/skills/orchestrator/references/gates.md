@@ -4,11 +4,11 @@ The profile's Checks table gives the commands and says which gates are `mechanic
 
 Trivial tasks need gate 1 only, when code changed.
 
-1. **Checks.** Typecheck, tests, lint from the profile. New behaviour: failing test first.
+1. **Checks.** Typecheck, tests, lint from the profile. New behaviour: failing test first. Before accepting a regenerated snapshot or golden, read its diff and confirm only the expected lines moved (versions, hashes).
 2. **Blast radius.** Before changing a shared symbol, constant or schema, grep for dependents. Bump the version of anything versioned (schema, rules, evaluator). Under a high-risk path, whatever the task size, run `feature-dev:code-explorer` first to map dependents, tests, fixtures and docs that quote the thing you are changing, and read its report before editing.
 3. **Simplify.** After tests pass, before review: `code-simplifier:code-simplifier` on the changed files. Same behaviour, tests still green.
-4. **Independent review.** The author's verification does not count. Small change: `feature-dev:code-reviewer`. Anything under a high-risk path, or a large branch: a fresh whole-branch reviewer on the most capable model.
+4. **Independent review.** The author's verification does not count. Check each reviewer claim against the code before acting; reviewers often have no shell, so run the checks yourself. A fix made in response to review gets its own scoped re-review: here, review fixes introduced a new defect twice (a quadratic lookup, a wrongly flagged operand). Small change: `feature-dev:code-reviewer`. Anything under a high-risk path, or a large branch: a fresh whole-branch reviewer on the most capable model.
 5. **Security review.** Required for code that parses untrusted input, handles file paths, auth, storage or permissions.
-6. **Real-input check.** A change to detection or parsing logic runs on at least one real input outside the fixtures. A rule tuned on one input is not independently tested.
+6. **Real-input check.** A change to detection or parsing logic runs on at least one real input outside the fixtures, including the case that used to give the wrong answer, and again after every fix. A rule tuned on one input is not independently tested. Parsing code also gets a time-budget test on a worst-case input (many tokens on one line, near the size cap).
 
 Report each gate's result. Never write "done" for a capability that is not wired into the live path and exercised by a test.
