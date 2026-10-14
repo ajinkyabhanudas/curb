@@ -24,7 +24,7 @@ TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeSc
 
 ## Non-claims
 
-From the shipped policy card (`unapproved-provider-reference` 1.0.1):
+From the shipped policy card (`unapproved-provider-reference` 1.1.0):
 
 - Does not establish which provider receives data at runtime.
 - Does not establish provider conduct, retention or training use.
@@ -38,11 +38,11 @@ Added by this charter: Curb is not a runtime monitor.
 
 These are hypotheses to test, not results.
 
-- H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository. Status: no real repository has been scanned yet, so the real-repository half of H1 is untested and the `unknown` rate on real repositories is unmeasured.
+- H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository. Status: a first real-repository measurement is done, against a synthetic obligation, on `vercel/chatbot` at `c2f8235e1f3ea903ad8b7f61447c4f74164b5c58` (`real-repo-measurement-001.md`). Confirm and scan ran end to end and reproduced the same hash on rerun; the seeded-fix and delta half of the loop was exercised on synthetic fixtures only. The first scan found a false-pass gap (model ids held in a catalog) and three false `minified` verdicts, both fixed in card 1.1.0 and evaluator 0.3.0. This is still one repository: 4 unknown files out of 156 before the fix and 0 after is an observation on that repository, not an `unknown` rate.
 - H2: across the unsupported, ambiguous and near-miss cases in scope, the engine produces zero false passes (an unsupported case must give `unknown`, not `pass`).
 - H3: the same inputs give the same result hash on repeated runs and on different machines. Today the determinism tests vary path, line endings, file creation order, actor and clock on one machine only; cross-machine reproduction is untested.
 
-What exists today: H1 and the single-machine part of H3 are exercised on synthetic fixtures by the engine test suite. No real repository has been scanned. The pinned real repository candidate is `vercel/chatbot` (see `source-manifest.md`), and its licence question is open.
+What exists today: H1 and the single-machine part of H3 are exercised on synthetic fixtures by the engine test suite, and one real repository, `vercel/chatbot` (see `source-manifest.md`), has been scanned from a local read-only clone (`real-repo-measurement-001.md`). Nothing from it is copied into this repository; its licence question for redistribution is still open.
 
 ## Owners
 
