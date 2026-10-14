@@ -1,7 +1,8 @@
 {
-  "retrievedAt": "2026-10-13T23:55:20.846Z",
+  "retrievedAt": "2026-10-14T00:00:29.348Z",
   "repo": "vercel/chatbot",
   "commitSha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+  "commitPinnedByArgument": true,
   "spdxLicense": "NOASSERTION",
   "files": [
     {
@@ -29,6 +30,6 @@
       "bytes": 344525
     }
   ],
-  "attribution": "Reference fixture derived from vercel/chatbot at c2f8235e1f3ea903ad8b7f61447c4f74164b5c58, licensed NOASSERTION. Not an assertion about the upstream project's practices. No endorsement implied.",
+  "attribution": "Reference fixture derived from vercel/chatbot at c2f8235e1f3ea903ad8b7f61447c4f74164b5c58. GitHub reports no recognised SPDX licence (NOASSERTION); the LICENSE file at this commit has 552 bytes and must be reviewed by the source reviewer before any redistribution. Not an assertion about the upstream project's practices. No endorsement implied.",
   "status": "DRAFT, unsigned. Needs source and license review sign-off before any redistribution."
 }

@@ -40,9 +40,9 @@ These are hypotheses to test, not results.
 
 - H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository.
 - H2: across the unsupported, ambiguous and near-miss cases in scope, the engine produces zero false passes (an unsupported case must give `unknown`, not `pass`).
-- H3: the same inputs give the same result hash on repeated runs and on different machines.
+- H3: the same inputs give the same result hash on repeated runs and on different machines. Today the determinism tests vary path, line endings, file creation order, actor and clock on one machine only; cross-machine reproduction is untested.
 
-What exists today: H1 and H3 are exercised on synthetic fixtures by the engine test suite. No real repository has been scanned. The pinned real repository candidate is `vercel/chatbot` (see `source-manifest.md`), and its licence question is open.
+What exists today: H1 and the single-machine part of H3 are exercised on synthetic fixtures by the engine test suite. No real repository has been scanned. The pinned real repository candidate is `vercel/chatbot` (see `source-manifest.md`), and its licence question is open.
 
 ## Owners
 
