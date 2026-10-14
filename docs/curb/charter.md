@@ -24,7 +24,7 @@ TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeSc
 
 ## Non-claims
 
-From the shipped policy card (`unapproved-provider-reference` 1.2.0):
+From the shipped policy card (`unapproved-provider-reference` 1.3.0):
 
 - Does not establish which provider receives data at runtime.
 - Does not establish provider conduct, retention or training use.

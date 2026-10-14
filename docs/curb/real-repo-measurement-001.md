@@ -188,3 +188,7 @@ Wall time went from 0.58 s to about 1.2 s between the two sessions, which looked
 - The rule changed in response to this repository. The after-scan is therefore not an independent test of the new rule; the synthetic catalog fixture (`engine/fixtures/repos/catalog/`) and the evaluator tests are the regression guard, and a second repository is needed to measure it fairly.
 - The findings show where source names a provider outside an invented allowlist. They do not show runtime traffic, provider conduct, or anything about the upstream project's obligations.
 - The licence question for redistributing this repository is open (`source-manifest.md`); nothing from it is copied into this repository.
+
+## Follow-up (CURB-19)
+
+With card 1.3.0 and evaluator 0.5.0, rescanning `vercel/chatbot` at the same commit with the same synthetic obligation gives 13 findings (was 7): the six new ones are `provider:` values in `lib/ai/models.ts` (moonshotai, deepseek, moonshotai, openai, openai, xai). No `catalog` unknown files. The trimmed copy still fails (13 findings). This note is otherwise the record of the 1.0.1 and 1.1.0 scans.
