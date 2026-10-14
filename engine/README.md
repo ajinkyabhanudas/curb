@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 362 tests
+npm test            # vitest, 364 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:5ce8fc67b471003ab59f6ef782ffe72d32260ef87c82947a7007a4aabae95a7a
+result sha256:48751d9e670a0fc5ff33379c92417d61adfde44d3bb0e041b4ca6f29bc025da6
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:6de91a68726b20db82ed41ddee0f03310ef507d2a3bad650d9fb92e619494acd
+result sha256:22ff719e2859b58ba8c9bf735bb50eb077b44a8a6373771e5b518955ef9fccc8
 ```
 
 4. Diff the two runs:
@@ -189,7 +189,7 @@ Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs
 2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
 3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
 4. Model-identifier literals anywhere in source (since card 1.1.0): a string literal or no-substitution template whose whole text is `<prefix>/<slug>`, where the prefix (any case) is a registered gateway prefix, the slug is `[a-z0-9][a-z0-9._:-]*` with no further `/`, and the slug contains a digit or hyphen. This catches catalogs such as `{ id: "openai/gpt-5-mini" }` that reach a constructor through a variable. `google/fonts` and `meta/robots` are not flagged (no digit or hyphen). Module names in imports, `require`, `import()`, import types and `declare module` are left to rule 1, object, interface, destructuring and computed keys are skipped, and a literal that is also a declared-constructor argument is reported once, by rule 3.
-5. Provider assignments (since card 1.3.0): a string literal assigned to a name that ends in `provider` or `providerId` (ignoring case and separators: `provider`, `modelProvider`, `LLM_PROVIDER`, `llm-provider`) and equals a registered provider ID. Targets are object properties, class fields, JSX attributes, default parameters and assignments, looking through `as`, `satisfies`, parentheses, `!`, `<const>`, `??`, `||`, `&&` and the branches of a ternary. Not examined: shorthand `{ provider }`, values from variables, comparisons, `switch` cases, enum values, arrays of names. A login object such as `signInWithOAuth({ provider: "google" })` or `<AuthButton provider="azure" />` is flagged too; the card lists it as a known false positive.
+5. Provider assignments (since card 1.3.0): a string literal assigned to a name that ends in `provider` or `providerId` (ignoring case and separators: `provider`, `modelProvider`, `LLM_PROVIDER`, `llm-provider`) and equals a registered provider ID. Targets are object properties, class fields, JSX attributes, variable declarations, parameter defaults and assignments (`=`, `||=`, `??=`, `&&=`, `x.provider`, `x["provider"]`), looking through `as`, `satisfies`, parentheses, `!`, `<const>`, `??`, `||`, `&&` (right side only) and the branches of a ternary. Not examined: shorthand `{ provider }`, values from variables, comparisons, `switch` cases, enum values, arrays of names. Login and UI choices (`signInWithOAuth({ provider: "google" })`, `<AuthButton provider="azure" />`) and cloud, identity or framework names (`cloudProvider: "azure"`, `identityProvider: "google"`, `dataProvider: "groq"`) are flagged too; the card lists them as known false positives.
 
 Which files are looked at:
 
