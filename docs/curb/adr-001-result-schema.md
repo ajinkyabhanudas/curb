@@ -46,7 +46,13 @@ CRLF and lone CR become LF before hashing and evaluation (`normalizeNewlines`). 
 
 ### evaluatorVersion
 
-`<EVALUATOR_VERSION>+typescript-<ts.version>`, for example `0.2.0+typescript-5.9.3`. The TypeScript compiler decides parse-error verdicts, so a compiler upgrade can change results and therefore changes the hash. `EVALUATOR_VERSION` moved from 0.1.0 to 0.2.0 when detection and the file-type rule changed, so `diff` refuses to compare results across that change.
+`<EVALUATOR_VERSION>+typescript-<ts.version>`, for example `0.3.0+typescript-5.9.3`. The TypeScript compiler decides parse-error verdicts, so a compiler upgrade can change results and therefore changes the hash. `diff` refuses to compare results across evaluator versions.
+
+Evaluator version history:
+
+- `0.1.0`: first vertical slice (imports, URL literals, declared-constructor arguments).
+- `0.2.0`: detection and the file-type rule changed in the final review (any URL scheme, template heads, `require.resolve`, import types, an allowlist of never-scanned types, every other type `unknown`).
+- `0.3.0`: model-identifier literals anywhere in source are flagged (card 1.1.0); a file is `minified` only when more than half its bytes sit in lines over 1000 characters, or by `.min.js` name, instead of whenever any one line is that long; `.mdc` is never scanned. Driven by the first real-repository measurement (`docs/curb/real-repo-measurement-001.md`).
 
 ### Obligation time
 

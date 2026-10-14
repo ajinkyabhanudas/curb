@@ -2,7 +2,7 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` version 1.0.1 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.1.0, evaluator 0.3.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 313 tests
+npm test            # vitest, 336 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -63,7 +63,7 @@ npm run -s curb -- confirm --card $CARD --agreement $AGR --quote "$Q" --allow an
   --approver demo-approver --at 2026-10-13T09:00:00Z --store $W/store --out $W/obligation.json
 ```
 
-The obligation id is `3d96566b1e43ef3b56b9b6fd16b3f1938411a273568c3f420ea843d8d85119ea`; the quote sits at range 384 to 490 of the normalized agreement text.
+The obligation id is `802716ec6ebdb6420ea7413f96a33644c34cd7f57d336c318f560affde1616c2`; the quote sits at range 384 to 490 of the normalized agreement text.
 
 2. Scan the mutated fixture (imports `@ai-sdk/openai`):
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:5f8eaba23320a1a9fc72879713b931e8b4d7bc394e89584272b0a15ce4af85b9
+result sha256:95783b6f8a801fb49c7f9177e12d568fe8da9b0299f5b3cba66254adc972349e
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:b9f84b3f5e380a9fdf9810b4e8303baebaf3af6cc3220d221e15696a3ade26fc
+result sha256:fcc648619ec53f0e37f04cef5e437c30c1305dcad221daebe2f1de393c82a5dc
 ```
 
 4. Diff the two runs:
@@ -132,11 +132,11 @@ npm run -s curb -- report --card $CARD --agreement $AGR --obligation $W/obligati
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v`1.0.1`. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.1.0`. Files evaluated: 2.
 ...
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
-| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `39cdc58dd2b5` |
+| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `18d94778774d` |
 ```
 
 The report also lists the confirmed obligation, exclusions and every input hash (result, tree, agreement, obligation, policy card, evaluator version), then the run envelope (start and finish time, operator, tenant). The envelope is outside the hash, so those times differ between runs.
@@ -185,23 +185,25 @@ Precedence for an evaluated scan: `error > fail > unknown > pass`.
 
 Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` files (extension matched case-insensitively, declaration files included), it flags:
 
-1. Import, `require`, `require.resolve`, dynamic `import()` and import-type (`typeof import('openai')`, `import('openai').T`) specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/*`).
+1. Import, `require`, `require.resolve`, dynamic `import()` and import-type (`typeof import('openai')`, `import('openai').T`) specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/openai`; each package is listed by name, so `@ai-sdk/react` is not a provider).
 2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
 3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
+4. Model-identifier literals anywhere in source (since card 1.1.0): a string literal or no-substitution template whose whole text is `<prefix>/<slug>`, where the prefix (any case) is a registered gateway prefix, the slug is `[a-z0-9][a-z0-9._:-]*` with no further `/`, and the slug contains a digit or hyphen. This catches catalogs such as `{ id: "openai/gpt-5-mini" }` that reach a constructor through a variable. `google/fonts` and `meta/robots` are not flagged (no digit or hyphen). Module names in imports, `require`, `import()`, import types and `declare module` are left to rule 1, object, interface, destructuring and computed keys are skipped, and a literal that is also a declared-constructor argument is reported once, by rule 3.
 
 Which files are looked at:
 
 - Only the TypeScript and JavaScript extensions above are analyzed.
-- These types are never scanned (an allowlist of non-code files): `.md` `.markdown` `.txt` `.rst` `.json` `.jsonc` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.env` `.lock` `.log` `.csv` `.tsv` `.xml` `.svg` `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.ico` `.bmp` `.tiff` `.woff` `.woff2` `.ttf` `.otf` `.eot` `.pdf` `.zip` `.gz` `.tar` `.tgz` `.map` `.css` `.scss` `.sass` `.less` `.sql` `.graphql` `.gql` `.prisma`, the suffix-like `.local` `.example` `.sample` `.template` `.dist` (so `.env.local` is skipped), and the compiled and media types `.wasm` `.node` `.so` `.dll` `.dylib` `.exe` `.bin` `.jar` `.class` `.o` `.a` `.pyc` `.db` `.sqlite` `.sqlite3` `.mp3` `.mp4` `.mov` `.webm` `.ogg` `.wav` `.flac` `.avi` `.psd` `.icns` `.heic`. Their size, readability and content do not matter. The list lives in one place, `IGNORABLE_EXT` in `src/evaluator/evaluate.ts`.
+- These types are never scanned (an allowlist of non-code files): `.md` `.markdown` `.txt` `.rst` `.json` `.jsonc` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.env` `.lock` `.log` `.csv` `.tsv` `.xml` `.svg` `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.ico` `.bmp` `.tiff` `.woff` `.woff2` `.ttf` `.otf` `.eot` `.pdf` `.zip` `.gz` `.tar` `.tgz` `.map` `.css` `.scss` `.sass` `.less` `.sql` `.graphql` `.gql` `.prisma` `.mdc`, the suffix-like `.local` `.example` `.sample` `.template` `.dist` (so `.env.local` is skipped), and the compiled and media types `.wasm` `.node` `.so` `.dll` `.dylib` `.exe` `.bin` `.jar` `.class` `.o` `.a` `.pyc` `.db` `.sqlite` `.sqlite3` `.mp3` `.mp4` `.mov` `.webm` `.ogg` `.wav` `.flac` `.avi` `.psd` `.icns` `.heic`. Their size, readability and content do not matter. The list lives in one place, `IGNORABLE_EXT` in `src/evaluator/evaluate.ts`.
 - Every other extension (`.py`, `.ps1`, `.coffee`, `.vue`, `.svelte`, ...) makes the file `unknown` (`unsupported-language`, or `unreadable` if its content is binary), so an unlisted language can never read as a pass. An extensionless file is `unknown` only if it starts with `#!` (after an optional BOM); `Makefile`, `LICENSE` and dotfiles such as `.env` are skipped.
 - Binary content (a NUL byte in the first 8 KiB, which includes UTF-16 text) is never analyzed. It is skipped for never-scanned types and for files with no extension; under any other extension (`.ts`, `.sh`, `.py`, `.ps1`, ...) the file is `unknown` (`unreadable`), because it may be a script. An extensionless file over the size cap is `unknown` (`too-large`) since it is never read; this is deliberately conservative.
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
+- A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
 
-A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
+A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.1.0 registers 21 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
 It does not check, and the card lists these as non-claims: which provider receives data at runtime, provider conduct, retention or training use, dead code, proxy rerouting, or whether the allowlist matches the signed agreement.
 
-False-negative classes (full list in `policies/unapproved-provider-reference.v1.json`): providers missing from the registry; dynamic specifiers (`require(name)`); model identifiers held in variables or environment files; wrapper modules hiding the real provider; URLs built by concatenation or template literals; hosts without a scheme or as subdomains; model IDs passed anywhere but the first literal argument of a declared constructor; aliased constructors; code inside never-scanned file types; `createRequire(...)('openai')`; `declare module 'openai'`; tagged-template constructor calls; test mocks such as `vi.mock('openai')`; path or bundler aliases that rename a package; anything inside a `.git` directory. Known false positives: provider imports in test-only or never-executed code.
+False-negative classes (full list in `policies/unapproved-provider-reference.v1.json`): providers missing from the registry, including model-id literals with an unregistered prefix; dynamic specifiers (`require(name)`); model identifiers assembled at runtime, read from environment or config files, or built from non-literals; model-id literals whose slug has no digit or hyphen; provider names held as bare strings (arrays such as `gatewayOrder: ["fireworks", "bedrock"]`, `providerOptions` keys, display-name maps); wrapper modules hiding the real provider, including the Vercel AI Gateway host `ai-gateway.vercel.sh`, which is a proxy, not a provider; URLs built by concatenation or template literals; hosts without a scheme or as subdomains; template literals with substitutions passed to constructors, aliases or tagged templates; code inside never-scanned file types; `createRequire(...)('openai')`; `declare module 'openai'`; test mocks such as `vi.mock('openai')`; path or bundler aliases that rename a package; anything inside a `.git` directory. Known false positives: provider imports in test-only or never-executed code.
 
 ## Trust model
 
@@ -229,7 +231,7 @@ report/        Markdown report and rerun delta
 store/         BlobStore and AuditLog interfaces, filesystem adapters
 ```
 
-Other directories: `engine/policies/` (the card), `engine/fixtures/` (synthetic agreement, `mutated` and `fixed` repos), `engine/test/`, `engine/scripts/` (source manifest tooling).
+Other directories: `engine/policies/` (the card), `engine/fixtures/` (synthetic agreement, `mutated`, `fixed` and `catalog` repos), `engine/test/`, `engine/scripts/` (source manifest tooling).
 
 ## Documents
 
@@ -240,5 +242,6 @@ Other directories: `engine/policies/` (the card), `engine/fixtures/` (synthetic 
 - ADR 001, result schema and hashing: [`docs/curb/adr-001-result-schema.md`](../docs/curb/adr-001-result-schema.md)
 - Prototype audit: [`docs/curb/prototype-audit.md`](../docs/curb/prototype-audit.md)
 - Source manifest: [`docs/curb/source-manifest.md`](../docs/curb/source-manifest.md)
+- First real-repository measurement: [`docs/curb/real-repo-measurement-001.md`](../docs/curb/real-repo-measurement-001.md)
 - Policy card template: [`docs/curb/policy-card-template.md`](../docs/curb/policy-card-template.md)
 - Original product plan: [`test_plan`](../test_plan)

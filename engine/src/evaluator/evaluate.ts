@@ -7,7 +7,7 @@ import type { Finding, ResultState, UnknownFile, UnknownReason } from '../schema
 import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 
 // Bump on any change to what is flagged or reported unknown: diff refuses to compare results across versions.
-export const EVALUATOR_VERSION = '0.2.0';
+export const EVALUATOR_VERSION = '0.3.0';
 
 // Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned; it is the
 // single source of truth for that list (the card and docs repeat it). Every other extension is unknown
@@ -18,7 +18,7 @@ export const IGNORABLE_EXT = new Set(
     'md', 'markdown', 'txt', 'rst', 'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'lock', 'log',
     'csv', 'tsv', 'xml', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'bmp', 'tiff', 'woff', 'woff2',
     'ttf', 'otf', 'eot', 'pdf', 'zip', 'gz', 'tar', 'tgz', 'map', 'css', 'scss', 'sass', 'less', 'sql', 'graphql',
-    'gql', 'prisma',
+    'gql', 'prisma', 'mdc',
     // suffix-like extensions, as in .env.local or config.example
     'local', 'example', 'sample', 'template', 'dist',
     // compiled and media artifacts that are binary in practice
@@ -27,6 +27,10 @@ export const IGNORABLE_EXT = new Set(
   ].map((e) => `.${e}`),
 );
 const MAX_LINE_LENGTH = 1000;
+// A file is minified when more than this share of its bytes sits in lines longer than MAX_LINE_LENGTH.
+const MINIFIED_LONG_LINE_SHARE = 0.5;
+// A whole-literal model identifier: `<prefix>/<slug>`, with the slug free of further slashes.
+const MODEL_ID = /^([^/]+)\/([a-z0-9][a-z0-9._:-]*)$/i;
 // Any `scheme://` literal is a candidate URL; new URL() then decides whether it has a hostname.
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
 const TEMPLATE_HOST_HEAD = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]+[/?#]/i;
@@ -127,8 +131,15 @@ function fileProblem(file: SnapshotFile): UnknownReason | undefined {
   return undefined;
 }
 
+// One long line (an SVG path, a class string) does not make a file minified; most of its bytes being in long lines does.
 function looksMinified(filePath: string, content: string): boolean {
-  return /\.min\.(js|mjs|cjs)$/.test(filePath) || content.split('\n').some((l) => l.length > MAX_LINE_LENGTH);
+  if (/\.min\.(js|mjs|cjs)$/.test(filePath)) return true;
+  const total = Buffer.byteLength(content, 'utf8');
+  let long = 0;
+  for (const line of content.split('\n')) {
+    if (line.length > MAX_LINE_LENGTH) long += Buffer.byteLength(line, 'utf8');
+  }
+  return total > 0 && long > total * MINIFIED_LONG_LINE_SHARE;
 }
 
 function looksGenerated(content: string): boolean {
@@ -165,6 +176,14 @@ function calleeName(node: ts.Expression): string | undefined {
   return undefined;
 }
 
+// An object key, interface member name, destructuring key or computed key: a name, not a value.
+function isPropertyName(node: ts.Node): boolean {
+  const parent = node.parent;
+  if (ts.isComputedPropertyName(parent)) return true;
+  if (ts.isBindingElement(parent) && parent.propertyName === node) return true;
+  return 'name' in parent && parent.name === node && !ts.isModuleDeclaration(parent);
+}
+
 export function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {
   const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.ESNext, true);
   const lineStarts = sf.getLineStarts();
@@ -189,6 +208,13 @@ export function scanFile(filePath: string, fileSha: string, content: string, car
   function gatewayProvider(text: string): string | undefined {
     const slash = text.indexOf('/');
     return slash > 0 ? own(card.registry.gatewayPrefixes, text.slice(0, slash).toLowerCase()) : undefined;
+  }
+
+  // A literal model id anywhere: the slug must hold a digit or hyphen, so paths such as google/fonts are not flagged.
+  function modelLiteralProvider(text: string): string | undefined {
+    const m = MODEL_ID.exec(text);
+    if (!m || !/[0-9-]/.test(m[2])) return undefined;
+    return own(card.registry.gatewayPrefixes, m[1].toLowerCase());
   }
 
   function check(node: ts.Node, text: string, providerId: string | undefined, what: string) {
@@ -219,8 +245,14 @@ export function scanFile(filePath: string, fileSha: string, content: string, car
   const isLiteral = (n: ts.Node | undefined): n is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
     n !== undefined && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n));
 
+  // Literals the model-literal check must not look at: module names (the package rule owns them) and declared-constructor
+  // arguments (the constructor check owns them, so it keeps its reason and there is one finding per literal). A parent
+  // is visited before its children, so these are recorded before the literal itself is reached.
+  const claimed = new Set<ts.Node>();
+
   function visit(node: ts.Node): void {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && isLiteral(node.moduleSpecifier)) {
+      claimed.add(node.moduleSpecifier);
       check(node.moduleSpecifier, node.moduleSpecifier.text, packageProvider(node.moduleSpecifier.text), 'import of package');
     } else if (ts.isCallExpression(node)) {
       const callee = node.expression;
@@ -228,20 +260,28 @@ export function scanFile(filePath: string, fileSha: string, content: string, car
       const name = calleeName(callee);
       const isRequire = name === 'require' || name === 'require.resolve';
       if (isLiteral(arg) && (isRequire || callee.kind === ts.SyntaxKind.ImportKeyword)) {
+        claimed.add(arg);
         check(arg, arg.text, packageProvider(arg.text), 'load of package');
       } else if (card.modelConstructors.includes(name ?? '')) {
         // Only the template head is known; a prefix must be fully inside it (`openai/${m}`).
         const text = isLiteral(arg) ? arg.text : arg && ts.isTemplateExpression(arg) ? arg.head.text : undefined;
+        if (arg) claimed.add(arg);
         if (text !== undefined && arg) check(arg, text, gatewayProvider(text), 'model identifier');
       }
     }
     // typeof import('pkg') and import('pkg').T in type positions
     if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && isLiteral(node.argument.literal)) {
       const lit = node.argument.literal;
+      claimed.add(lit);
       check(lit, lit.text, packageProvider(lit.text), 'import of package');
     }
     if (ts.isExternalModuleReference(node) && isLiteral(node.expression)) {
+      claimed.add(node.expression);
       check(node.expression, node.expression.text, packageProvider(node.expression.text), 'import of package');
+    }
+    if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) claimed.add(node.name);
+    if (isLiteral(node) && !claimed.has(node) && !isPropertyName(node)) {
+      check(node, node.text, modelLiteralProvider(node.text), 'model identifier literal');
     }
     if (isLiteral(node)) check(node, node.text, hostProvider(node.text), 'URL');
     // A template URL counts only when the head fixes the whole host: it continues past the host with / ? or #

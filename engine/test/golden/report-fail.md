@@ -16,7 +16,7 @@ This report checks configured engineering evidence against one human-confirmed c
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v`1.0.1`. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.1.0`. Files evaluated: 2.
 
 ## Confirmed obligation
 
@@ -29,7 +29,7 @@ Rule: `unapproved-provider-reference` v`1.0.1`. Files evaluated: 2.
 
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
-| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `39cdc58dd2b5` |
+| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `18d94778774d` |
 
 ## Unknown files and notes
 
@@ -47,12 +47,12 @@ None.
 
 ## Inputs and hashes
 
-- Result hash: `aa256dfe704c2ba7ca76f0806221d9d747c24448e0e22f8aea3e7d768659802b`
+- Result hash: `4ee52a813b38638b251dfdc112d17de61438139a22badd8f54339dcbc3edc7a7`
 - Tree hash: `9cf346fceb7264551aeadba1b384b650cf93a1d3f04c012707873bee1f85fdb8`
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
-- Obligation id: `a47aee5897722ecc6ecb1b1c5e1f88b7ef8abe26421d51cccb49287ad200b5c1`
-- Policy card hash: `540aa49a9711d48e1d43a62b91c811bf15b05e09b9a1d4d34f6b3941e649d7b7`
-- Evaluator version: `0.2.0+typescript-5.9.3`
+- Obligation id: `e92db1434f69d1636fd85d7ab14fec8fb0e0fc857caf33cd1e0dc5a565d2d8f5`
+- Policy card hash: `0ce817e252a4520e565deca4d7fe8afee8972690c6d120d1c89e67e6a255aefe`
+- Evaluator version: `0.3.0+typescript-5.9.3`
 
 ## Run
 
