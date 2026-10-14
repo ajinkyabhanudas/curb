@@ -748,7 +748,7 @@ describe('evaluate: provider property values (CURB-19, rule A)', () => {
         'export interface I { provider: "groq" }',
         'export const a = { provider: "custom" };',
         'export const b = { vendor: "groq" };',
-        'const provider = "groq"; export const c = { provider };',
+        'const provider = pick(); export const c = { provider };',
         'export const d = { providerName: "groq" };',
         'export const e = { provider: someCall("groq") };',
         '',
@@ -795,6 +795,34 @@ describe('evaluate: provider property values (CURB-19, rule A)', () => {
       ].join('\n'),
     });
     expect(ids(out)).toEqual(['mistral', 'cohere', 'deepseek', 'perplexity', 'groq', 'openai']);
+  });
+
+  it('flags variable declarations, plain parameter defaults, logical assignments, element-access assignments and namespaced attributes', async () => {
+    const out = await run({
+      'v.ts': [
+        'const llmProvider = "openai";',
+        'let provider = "groq";',
+        'function f(provider: string = "mistral") { return provider; }',
+        'x.provider ||= "cohere";',
+        'x["provider"] = "deepseek";',
+        'export const d = { [`provider`]: "perplexity" };',
+        '',
+      ].join('\n'),
+      'ns.tsx': 'export const A = () => <C a:provider="xai" />;\n',
+    });
+    expect(ids(out)).toEqual(['xai', 'openai', 'groq', 'mistral', 'cohere', 'deepseek', 'perplexity']);
+  });
+
+  it('does not treat the left side of && as the value, but does for ?? and ||', async () => {
+    const out = await run({
+      'a.ts': [
+        'export const a = { provider: "groq" && x };',
+        'export const b = { provider: ("openai" ?? x) };',
+        'export const c = { provider: "mistral" || x };',
+        '',
+      ].join('\n'),
+    });
+    expect(ids(out)).toEqual(['openai', 'mistral']);
   });
 
   it('still ignores comparisons, enums, unrelated attributes and a condition that is merely a string', async () => {

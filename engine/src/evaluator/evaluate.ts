@@ -257,11 +257,20 @@ export function looksLikeCatalog(filePath: string, content: string): boolean {
   return ids >= CATALOG_MIN_IDS && ids / strings >= CATALOG_MIN_SHARE;
 }
 
+const ASSIGNMENT_TOKENS = [
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+];
 const isProviderName = (name: string): boolean => PROVIDER_KEY.test(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
 function nameText(name: ts.Node): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
-  if (ts.isComputedPropertyName(name) && ts.isStringLiteral(name.expression)) return name.expression.text;
+  if (ts.isComputedPropertyName(name) && (ts.isStringLiteral(name.expression) || ts.isNoSubstitutionTemplateLiteral(name.expression))) {
+    return name.expression.text;
+  }
+  if (ts.isJsxNamespacedName(name)) return name.name.text;
   return undefined;
 }
 
@@ -275,7 +284,10 @@ function isProviderPropertyValue(node: ts.Node): boolean {
   while (
     ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent) || ts.isParenthesizedExpression(parent) ||
     ts.isNonNullExpression(parent) || ts.isTypeAssertionExpression(parent) || ts.isJsxExpression(parent) ||
-    (ts.isBinaryExpression(parent) && passes.includes(parent.operatorToken.kind)) ||
+    (ts.isBinaryExpression(parent) &&
+      passes.includes(parent.operatorToken.kind) &&
+      // the left side of && is a condition, not the value
+      !(parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && parent.left === child)) ||
     (ts.isConditionalExpression(parent) && parent.condition !== child)
   ) {
     child = parent;
@@ -283,11 +295,15 @@ function isProviderPropertyValue(node: ts.Node): boolean {
   }
   let name: string | undefined;
   if ((ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.initializer === child) name = nameText(parent.name);
-  else if (ts.isBindingElement(parent) && parent.initializer === child) name = nameText(parent.name);
+  else if ((ts.isBindingElement(parent) || ts.isParameter(parent) || ts.isVariableDeclaration(parent)) && parent.initializer === child) {
+    name = nameText(parent.name);
+  }
   else if (ts.isJsxAttribute(parent) && parent.initializer === child) name = nameText(parent.name);
-  else if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === child) {
+  else if (ts.isBinaryExpression(parent) && ASSIGNMENT_TOKENS.includes(parent.operatorToken.kind) && parent.right === child) {
     const left = parent.left;
-    name = ts.isPropertyAccessExpression(left) ? nameText(left.name) : ts.isIdentifier(left) ? left.text : undefined;
+    if (ts.isPropertyAccessExpression(left)) name = nameText(left.name);
+    else if (ts.isElementAccessExpression(left)) name = nameText(left.argumentExpression);
+    else if (ts.isIdentifier(left)) name = left.text;
   }
   return name !== undefined && isProviderName(name);
 }

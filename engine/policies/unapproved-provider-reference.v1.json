@@ -5,7 +5,7 @@
   "owner": "unassigned (to be named by the product owner)",
   "reviewDate": "2026-10-13",
   "severity": "high",
-  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal, gateway model identifier passed to a declared model constructor, or model-identifier literal anywhere in scanned source (a whole string of the form <prefix>/<model> whose model part contains a digit or hyphen, for example \"openai/gpt-5\") or a string value assigned to a provider-named target (a property, class field, JSX attribute, default parameter or assignment target whose name ends in provider or providerId, ignoring case and separators, for example provider, modelProvider, LLM_PROVIDER or llm-provider) that is a registered provider id, that resolves to a registered provider outside the customer's allowlist is a finding.",
+  "interpretation": "When a confirmed commitment limits the model providers that may receive customer content, any import, URL literal, gateway model identifier passed to a declared model constructor, or model-identifier literal anywhere in scanned source (a whole string of the form <prefix>/<model> whose model part contains a digit or hyphen, for example \"openai/gpt-5\") or a string value assigned to a provider-named target (a property, class field, JSX attribute, variable declaration, parameter default or assignment target whose name ends in provider or providerId, ignoring case and separators, for example provider, modelProvider, LLM_PROVIDER or llm-provider) that is a registered provider id, that resolves to a registered provider outside the customer's allowlist is a finding.",
   "approvedTextPatterns": [
     "Provider will route Customer Content for model inference only to the following model providers: <list>."
   ],
@@ -23,7 +23,7 @@
     "A symlink yields unknown whatever its name; a file that is too large or unreadable yields unknown unless its type is never scanned"
   ],
   "falsePositiveExamples": [
-    "A provider-named target that is a login method or a UI choice, not a data recipient, for example signInWithOAuth({ provider: \"google\" }), <AuthButton provider=\"azure\" /> or authProvider: \"google\", or a provider id in a test fixture",
+    "A provider-named target that is a login method, a UI choice or a cloud, identity or framework provider, not a model recipient, for example signInWithOAuth({ provider: \"google\" }), <AuthButton provider=\"azure\" />, authProvider: \"google\", cloudProvider: \"azure\", identityProvider: \"google\" or dataProvider: \"groq\", or a provider id in a test fixture",
     "A provider import in a test-only file that never ships",
     "A provider referenced in code that is never executed"
   ],

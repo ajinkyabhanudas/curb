@@ -70,6 +70,7 @@ describe('policy card', () => {
     expect(risks).toMatch(/comparisons/);
     expect(risks).toMatch(/formatting change alone/);
     expect(card.falsePositiveExamples.join('\n')).toMatch(/AuthButton/);
+    expect(card.falsePositiveExamples.join('\n')).toMatch(/cloudProvider/);
     expect(risks).toMatch(/Bare model ids without a provider prefix/);
     expect(risks).toMatch(/single real repository/);
   });
