@@ -32,8 +32,10 @@ const MINIFIED_LONG_LINE_SHARE = 0.5;
 // A property whose value names a provider: `provider: "groq"`, `providerId`, `provider_id`, `embeddings_provider`.
 const PROVIDER_KEY = /^(provider|providerId|provider_id)$|_provider$/;
 // A bare model id from a known family, with no provider prefix (`llama3-8b-8192`). A digit or hyphen is required.
-const BARE_MODEL_ID = /^(gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|codestral|command-r|deepseek|qwen|sonar|grok-|o1|o3|gemma|pplx-)[a-z0-9._:-]*$/;
-const BARE_MODEL_ID_QUOTED = /["'`](?:gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|codestral|command-r|deepseek|qwen|sonar|grok-|o1|o3|gemma|pplx-)/g;
+const MODEL_FAMILIES = 'gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|codestral|command-r|deepseek|qwen|sonar|grok-|o1|o3|gemma|pplx-';
+const BARE_MODEL_ID = new RegExp(`^(${MODEL_FAMILIES})[a-z0-9._:-]*$`);
+// Global, for counting quoted candidates with String.prototype.match before the file is parsed.
+const BARE_MODEL_ID_QUOTED = new RegExp(`["'\`](?:${MODEL_FAMILIES})`, 'g');
 // A file is catalog-shaped when it holds at least this many bare model ids as values and they are at least this
 // share of its string literals. Such a file names providers in a way the scan cannot map, so it is unknown.
 const CATALOG_MIN_IDS = 6;
