@@ -703,6 +703,15 @@ describe('evaluate: small SVG icon components are not minified (CURB-21)', () =>
     expect(out.filesEvaluated).toBe(2);
   });
 
+  it('stays linear on a long line with many JSX attributes (CURB-21 review: quadratic lookup)', async () => {
+    const src = `export const x = <svg>${'<b a="" />'.repeat(80000)}</svg>;`;
+    expect(src.length).toBeGreaterThan(800000);
+    const started = Date.now();
+    const out = await run({ 'many.tsx': src });
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(out.unknownFiles).toEqual([{ path: 'many.tsx', reason: 'minified' }]);
+  }, 30000);
+
   it('does not exempt a long JSX attribute in a .js file or by name', async () => {
     const out = await run({ 'icon.js': icon(), 'vendor.min.js': 'var a=1;' });
     expect(out.unknownFiles.map((u) => u.path).sort()).toEqual(['icon.js', 'vendor.min.js']);

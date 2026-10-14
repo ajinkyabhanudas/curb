@@ -153,15 +153,21 @@ function jsxAttributeBytesOnLongLines(filePath: string, content: string): number
   const kind = filePath.toLowerCase().endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.JSX;
   const source = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, false, kind);
   let bytes = 0;
+  // Attributes are visited in source order, so remember the current line's bounds: a long line with many
+  // attributes would otherwise be rescanned for every one of them.
+  let lineStart = 0;
+  let lineEnd = -1;
   const visit = (node: ts.Node): void => {
     if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
       const start = node.initializer.getStart(source);
       const text = content.slice(start, node.initializer.end);
       // Lines are split on \n only, as in looksMinified: TypeScript also breaks lines on U+2028 and U+2029.
-      const lineStart = content.lastIndexOf('\n', start - 1) + 1;
-      const lineEnd = content.indexOf('\n', start);
-      const lineLength = (lineEnd === -1 ? content.length : lineEnd) - lineStart;
-      if (!text.includes('\n') && lineLength > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
+      if (start < lineStart || start > lineEnd) {
+        lineStart = content.lastIndexOf('\n', start - 1) + 1;
+        const next = content.indexOf('\n', start);
+        lineEnd = next === -1 ? content.length : next;
+      }
+      if (!text.includes('\n') && lineEnd - lineStart > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
     }
     ts.forEachChild(node, visit);
   };
