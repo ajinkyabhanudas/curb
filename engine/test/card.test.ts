@@ -15,7 +15,10 @@ describe('policy card', () => {
 
   it('lists normalized provider ids from the registry', async () => {
     const { card } = await loadCard(CARD_PATH);
-    expect(registryProviderIds(card)).toEqual(['anthropic', 'google', 'mistral', 'openai', 'xai']);
+    expect(registryProviderIds(card)).toEqual([
+      'alibaba', 'amazon', 'anthropic', 'azure', 'bedrock', 'cohere', 'deepinfra', 'deepseek', 'fireworks', 'google',
+      'groq', 'meta', 'minimax', 'mistral', 'moonshotai', 'nvidia', 'openai', 'perplexity', 'togetherai', 'xai', 'zai',
+    ]);
   });
 
   it('rejects a card with a missing registry', async () => {
@@ -36,9 +39,9 @@ describe('policy card', () => {
     expect(own({ a: 'x' }, '__proto__')).toBeUndefined();
   });
 
-  it('ships version 1.0.1, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
+  it('ships version 1.1.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
     const { card, hash } = await loadCard(CARD_PATH);
-    expect(card.version).toBe('1.0.1');
+    expect(card.version).toBe('1.1.0');
     expect(card.status).toBe('draft, pending counsel approval');
     const edits: ((c: typeof card) => void)[] = [
       (c) => c.approvedTextPatterns.push('extra'),
@@ -54,5 +57,20 @@ describe('policy card', () => {
       edit(copy);
       expect(hashOf(copy)).not.toBe(hash);
     }
+  });
+
+  it('1.1.0 describes model-identifier literals and discloses what they still miss', async () => {
+    const { card } = await loadCard(CARD_PATH);
+    expect(card.interpretation).toMatch(/model[- ]identifier literal/i);
+    const risks = card.falseNegativeRisks.join('\n');
+    expect(risks).not.toMatch(/^Model identifiers held in variables or environment files$/m);
+    expect(risks).toMatch(/assembled at runtime/);
+    expect(risks).toMatch(/gatewayOrder/);
+    expect(risks).toMatch(/providerOptions/);
+    expect(risks).toMatch(/display-name maps/);
+    expect(risks).toMatch(/without a digit or hyphen/);
+    expect(risks).toMatch(/providers not in the registry/i);
+    expect(risks).toMatch(/ai-gateway\.vercel\.sh/);
+    for (const [prefix, id] of Object.entries(card.registry.gatewayPrefixes)) expect(id).toBe(prefix);
   });
 });
