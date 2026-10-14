@@ -482,8 +482,8 @@ describe('evaluate: binary entries never hide an unlisted language (re-review re
 });
 
 describe('evaluate: model-identifier literals anywhere in source (real-repo gap, card 1.1.0)', () => {
-  it('bumps the evaluator version for the widened detection and minified rule', () => {
-    expect(EVALUATOR_VERSION).toBe('0.3.0');
+  it('reports evaluator 0.4.0: JSX attribute strings no longer count towards the minified share (CURB-21)', () => {
+    expect(EVALUATOR_VERSION).toBe('0.4.0');
   });
 
   const one = async (src: string, allowlist = ['anthropic'], name = 'a.ts') => run({ [name]: src }, allowlist);
@@ -660,6 +660,61 @@ describe('evaluate: minified heuristic by share of bytes in long lines', () => {
       { path: 'gen.ts', reason: 'generated' },
       { path: 'tiny.min.js', reason: 'minified' },
     ]);
+  });
+});
+
+describe('evaluate: small SVG icon components are not minified (CURB-21)', () => {
+  const pathData = (n: number) => `M${Array.from({ length: n }, (_, i) => `${i % 9}.5 ${i % 7}`).join('L')}Z`.padEnd(2900, '0').slice(0, 2900);
+  const icon = (extra = '') =>
+    ['export const Icon = () => (', '  <svg viewBox="0 0 24 24">', `    <path ${extra}d="${pathData(260)}" />`, '  </svg>', ');', ''].join('\n');
+
+  it('evaluates a small icon whose single JSX d attribute holds most of the bytes', async () => {
+    const src = icon();
+    expect(src.split('\n').filter((l) => l.length > 1000)).toHaveLength(1);
+    const out = await run({ 'openai-svg.tsx': src });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+    expect(out.filesEvaluated).toBe(1);
+  });
+
+  it('still finds a provider reference sitting in a JSX attribute of such an icon', async () => {
+    const out = await run({ 'logo.tsx': icon('href="https://api.openai.com/v1" ') });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.findings.map((f) => f.providerId)).toEqual(['openai']);
+  });
+
+  it('keeps a .tsx file minified when its long lines are code, not JSX attribute strings', async () => {
+    const three = [1, 2, 3].map((n) => `const s${n} = "${'y'.repeat(1990)}";`).join('\n');
+    const packed = `export const x = <a d="short" />;${'a=1;'.repeat(600)}`;
+    const out = await run({ 'three.tsx': three, 'packed.tsx': packed });
+    expect(out.unknownFiles).toEqual([
+      { path: 'packed.tsx', reason: 'minified' },
+      { path: 'three.tsx', reason: 'minified' },
+    ]);
+  });
+
+  it('does not throw, and still exempts the attribute, when U+2028 or U+2029 sit before it (CURB-21 review)', async () => {
+    const d = pathData(260);
+    const out = await run({
+      'one-line.tsx': `/*\u2028\u2029*/export const a = <path d="${d}" />;`,
+      'multi-line.tsx': `/*\u2028*/export const A = () => (\n  <svg>\n    <path d="${d}" />\n  </svg>\n);\n`,
+    });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.filesEvaluated).toBe(2);
+  });
+
+  it('stays linear on a long line with many JSX attributes (CURB-21 review: quadratic lookup)', async () => {
+    const src = `export const x = <svg>${'<b a="" />'.repeat(80000)}</svg>;`;
+    expect(src.length).toBeGreaterThan(800000);
+    const started = Date.now();
+    const out = await run({ 'many.tsx': src });
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(out.unknownFiles).toEqual([{ path: 'many.tsx', reason: 'minified' }]);
+  }, 30000);
+
+  it('does not exempt a long JSX attribute in a .js file or by name', async () => {
+    const out = await run({ 'icon.js': icon(), 'vendor.min.js': 'var a=1;' });
+    expect(out.unknownFiles.map((u) => u.path).sort()).toEqual(['icon.js', 'vendor.min.js']);
   });
 });
 
