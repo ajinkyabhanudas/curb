@@ -4,7 +4,7 @@ Curb checks a human-confirmed contract commitment, such as a limit on which AI m
 
 ## Status
 
-V1 vertical slice (engine) on branch kan-6-engine-vertical-slice; frontend/ holds the earlier form-to-PDF prototype, kept for reference and not part of the verifier.
+V1 vertical slice (engine); frontend/ holds the earlier form-to-PDF prototype, kept for reference and not part of the verifier.
 
 ## Setup
 

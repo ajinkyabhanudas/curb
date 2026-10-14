@@ -12,7 +12,7 @@ A Curb verdict will be read by a developer and possibly by a lawyer. It must be 
 
 ### Five states and precedence
 
-`pass`, `fail`, `unknown`, `not-applicable`, `error`. For an evaluated scan the precedence is `error > fail > unknown > pass`. In code: an evaluator exception gives `error`; otherwise any finding gives `fail`; otherwise any unknown file gives `unknown`; otherwise zero evaluated files gives `unknown` with the note `no-evaluable-files`; otherwise `pass`. `pass` is scope-limited evidence, never compliance.
+`pass`, `fail`, `unknown`, `not-applicable`, `error`. For an evaluated scan the precedence is `error > fail > unknown > pass`. In code: an evaluator exception outside per-file analysis gives `error` (an exception while parsing or walking one file marks only that file `unknown` with reason `parse-error`, so `error` is reachable only outside per-file analysis); otherwise any finding gives `fail`; otherwise any unknown file gives `unknown`; otherwise zero evaluated files gives `unknown` with the note `no-evaluable-files`; otherwise `pass`. `pass` is scope-limited evidence, never compliance.
 
 ### State invariants
 
@@ -30,7 +30,7 @@ This stops a re-hashed forgery from claiming PASS while listing findings.
 
 ### Hashed body versus envelope
 
-The result file has a `body` and an `envelope`. The result hash is `sha256(canonical(body))`. The body holds schema version, rule id and version, evaluator version, policy-card hash, tree hash, agreement hash, obligation hash, state, findings, unknown files, files evaluated, exclusions and notes. Timestamps, operator and tenant id live in the envelope, outside the hash. Evaluator diagnostics (exception text) are printed to stderr and never enter the file or the hash.
+The result file has a `body` and an `envelope`. The result hash is `sha256(canonical(body))`. The body holds schema version, rule id and version, evaluator version, policy-card hash, tree hash, agreement hash, obligation hash, state, findings, unknown files, files evaluated, exclusions and notes. `exclusions` always lists `dir:.git` (the snapshot skips `.git` at any depth) alongside the card's directory and file exclusions, sorted. Timestamps, operator and tenant id live in the envelope, outside the hash. Evaluator diagnostics (exception text) are printed to stderr and never enter the file or the hash.
 
 ### Canonical JSON
 
@@ -38,7 +38,7 @@ The result file has a `body` and an `envelope`. The result hash is `sha256(canon
 
 ### Newline normalization
 
-CRLF and lone CR become LF before hashing and evaluation (`normalizeNewlines`). Offsets are UTF-16 code units of the normalized text. A file's `sha256` is the hash of the normalized text. The snapshot size cap applies to the normalized size, so CRLF and LF forms of a file get the same verdict. Binary files are hashed raw and never normalized.
+CRLF and lone CR become LF before hashing and evaluation (`normalizeNewlines`). Offsets are UTF-16 code units of the normalized text. A file's `sha256` is the hash of the normalized text. The snapshot size cap applies to the normalized size, so CRLF and LF forms of a file get the same verdict. Binary files are hashed raw and never normalized. Text is decoded as UTF-8, and invalid UTF-8 sequences decode to U+FFFD replacement characters, so two different non-UTF-8 files can share a content hash. The verdict is unaffected: such files decode to the same text, which is all the evaluator sees.
 
 ### Finding id
 
@@ -46,7 +46,7 @@ CRLF and lone CR become LF before hashing and evaluation (`normalizeNewlines`). 
 
 ### evaluatorVersion
 
-`<EVALUATOR_VERSION>+typescript-<ts.version>`, for example `0.1.0+typescript-5.9.3`. The TypeScript compiler decides parse-error verdicts, so a compiler upgrade can change results and therefore changes the hash.
+`<EVALUATOR_VERSION>+typescript-<ts.version>`, for example `0.2.0+typescript-5.9.3`. The TypeScript compiler decides parse-error verdicts, so a compiler upgrade can change results and therefore changes the hash. `EVALUATOR_VERSION` moved from 0.1.0 to 0.2.0 when detection and the file-type rule changed, so `diff` refuses to compare results across that change.
 
 ### Obligation time
 

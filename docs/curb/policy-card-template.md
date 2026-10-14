@@ -10,7 +10,7 @@ Source of truth: the `PolicyCard` interface in `engine/src/policy/card.ts`. The 
 |---|---|---|
 | `id` | string | Stable rule identifier. Obligations and results name it. |
 | `version` | string | Card version. An obligation is bound to one id and version; a mismatch is refused. |
-| `status` | string | Review state. Printed at the top of every report and scan summary. |
+| `status` | string | Review state. Printed at the top of every Markdown report and rerun delta, as the second line of the scan summary, and in the `policyCard` block of the JSON report. |
 | `owner` | string | Named person or role responsible for the card. |
 | `reviewDate` | string | Date of the last review. |
 | `severity` | `critical`, `high`, `medium` or `low` | Severity given to every finding of this rule. |
@@ -35,9 +35,11 @@ The provider ids in the three registry maps are the only ids an obligation allow
 
 A card ships with status `draft, pending counsel approval` until a named counsel and a security reviewer both sign. Only then may the status be changed, by a human. Any change to card text, including wording, registry entries or exclusions, changes the card hash and therefore requires a version bump, so that old results and obligations remain tied to the text they were produced under.
 
-## Open item for the policy owner
+## Version history of the shipped card
 
-The shipped card `unapproved-provider-reference` was edited after its first commit without a version bump. It was added in `d8e6e8a` and changed in `cb0e418` and `05dac51`, and it is still `1.0.0`, status `draft, pending counsel approval`. A result or obligation made against an earlier text of `1.0.0` would carry a different card hash from today's file. Because the card is an unapproved draft and no approval has been given, no approved text has been altered. The policy owner should decide whether to bump the version to `1.0.1` (or `1.1.0`) before counsel review, so the reviewed text has a clean version.
+The shipped card `unapproved-provider-reference` was edited after its first commit without a version bump: it was added in `d8e6e8a` and changed in `cb0e418` and `05dac51` while still `1.0.0`. The final branch review bumped it to `1.0.1`, adding the file-type prerequisites and new false-negative disclosures at the same time. That bump resolves the earlier unversioned edits: `1.0.1` names one text, and any result or obligation made under an earlier `1.0.0` text carries a different version as well as a different card hash. Status stays `draft, pending counsel approval`; no approved text has been altered because no approval has been given.
+
+Obligations bind the card id and version, not its hash, so a future edit without a bump would again be accepted by `scan` and visible only as a changed `policyCardHash` in results. The review rule above (every text change bumps the version) is the control.
 
 ## Known discrepancies
 

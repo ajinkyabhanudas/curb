@@ -20,11 +20,11 @@ Confirm obligation, scan, evidence, fix, rerun.
 
 ## Supported repository type
 
-TypeScript and JavaScript. Static analysis of a local snapshot only. Other languages and embedding formats yield `unknown`, never `pass`.
+TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeScript and JavaScript files are analyzed; a fixed list of non-code file types (docs, data, config, images, fonts, archives, styles, SQL, GraphQL) is not scanned; every other file type, including other languages and embedding formats, yields `unknown`, never `pass`.
 
 ## Non-claims
 
-From the shipped policy card (`unapproved-provider-reference` 1.0.0):
+From the shipped policy card (`unapproved-provider-reference` 1.0.1):
 
 - Does not establish which provider receives data at runtime.
 - Does not establish provider conduct, retention or training use.
@@ -38,7 +38,7 @@ Added by this charter: Curb is not a runtime monitor.
 
 These are hypotheses to test, not results.
 
-- H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository.
+- H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository. Status: no real repository has been scanned yet, so the real-repository half of H1 is untested and the `unknown` rate on real repositories is unmeasured.
 - H2: across the unsupported, ambiguous and near-miss cases in scope, the engine produces zero false passes (an unsupported case must give `unknown`, not `pass`).
 - H3: the same inputs give the same result hash on repeated runs and on different machines. Today the determinism tests vary path, line endings, file creation order, actor and clock on one machine only; cross-machine reproduction is untested.
 

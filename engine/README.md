@@ -2,13 +2,13 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` v1 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.0.1 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
 - It is not legal advice and not a compliance certification.
 - `pass` is scope-limited evidence: every analyzed file parsed and no reference outside the allowlist was found by this one rule. It does not mean the commitment is met.
-- The shipped policy card has status `draft, pending counsel approval`. That status prints at the top of every report and scan until a human changes it. No output of this engine can be presented as counsel-approved.
+- The shipped policy card has status `draft, pending counsel approval`. That status prints on every scan summary (second line), at the top of every Markdown report and delta, and in the JSON report, until a human changes it. No output of this engine can be presented as counsel-approved.
 - The engine does not decide what an agreement means. A named human supplies the quote, the allowlist and whether the commitment applies; the engine records that and scans against it.
 - Owners, counsel approval of the card, and source and license review are unsigned human gates. See `docs/curb/`.
 
@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 264 tests
+npm test            # vitest, 304 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -32,12 +32,18 @@ CLI entry point: `npm run -s curb -- <command> [options]` (the `-s` keeps npm's 
 | `confirm` | Record a human-confirmed obligation and print it as JSON | `--agreement` `--card` `--quote` `--approver` (required); `--start` `--applicability` (default `applies`) `--allow` (comma-separated provider IDs) `--at` (ISO time, default now) `--exception` `--out` `--force` `--store` `--tenant` |
 | `scan` | Scan a repo against the obligation and print the verdict | `--repo` `--card` `--agreement` `--obligation` (required); `--out` `--force` `--store` (default `.curb`) `--tenant` (default `demo`) `--actor` (default `cli`) |
 | `report` | Render a saved result as Markdown or JSON | `--result` `--card` `--agreement` `--obligation` (required); `--format md\|json` (default `md`) `--out` `--force` |
-| `diff` | Compare two saved results (fixed, added, unchanged) | `--before` `--after` (required); `--out` `--force` |
-| `audit` | Verify the hash-chained audit log of a store | `--store` (required); `--tenant` |
+| `diff` | Compare two saved results (fixed, added, unchanged) | `--before` `--after` `--card` (required); `--out` `--force` |
+| `audit` | Verify the hash-chained audit log of a store | `--store` (required); `--tenant` (default `demo`) |
 
 `--out` refuses to overwrite an existing file unless `--force` is given. `--start` is the character offset of the quote in the agreement; if omitted, the quote is located in the text (it must be found exactly once).
 
-Exit codes: `0` for any verdict (pass, fail, unknown, not-applicable) and for successful `confirm`, `report`, `diff` and a clean `audit`; `2` for usage errors, refusals, unreadable or inconsistent inputs and a corrupt audit chain; `3` for the `error` state (the evaluator failed; this is not a verdict).
+`diff --card` must be the policy card both results were produced with: its hash has to equal `policyCardHash` in both, otherwise `diff` refuses with exit code 2. The card supplies the status line printed under the delta heading.
+
+`report --format json` prints a report, not a result file: `{ "policyCard": { "id", "version", "status", "hash" }, "nonClaims": [...], "result": <the verified result file> }`. Pass the original result file, not this output, to `report` or `diff`; they reject the wrapper.
+
+`audit` exits 2 with `no audit log found for tenant "<id>" in store "<path>"` when the tenant has no `audit.jsonl` (a mistyped `--store` or `--tenant` never reads as a verified log). An existing empty log is OK with 0 entries. A log that cannot be parsed prints `entries: unknown` and `audit chain CORRUPT`, exit 2.
+
+Exit codes: `0` for any verdict (pass, fail, unknown, not-applicable) and for successful `confirm`, `report`, `diff` and a clean `audit`; `2` for usage errors, refusals, unreadable or inconsistent inputs, a missing audit log and a corrupt audit chain; `3` for the `error` state (the evaluator failed; this is not a verdict). A failure inside one file's analysis marks that file `unknown` (`parse-error`) instead, so `error` is reached only if evaluation fails outside per-file analysis.
 
 ## Worked demo
 
@@ -57,7 +63,7 @@ npm run -s curb -- confirm --card $CARD --agreement $AGR --quote "$Q" --allow an
   --approver demo-approver --at 2026-10-13T09:00:00Z --store $W/store --out $W/obligation.json
 ```
 
-The obligation id is `947f34a46ebaaf7f90fb04bb9f0ccf332b03b506ff325f2fe0808dc14be17180`; the quote sits at range 384 to 490 of the normalized agreement text.
+The obligation id is `3d96566b1e43ef3b56b9b6fd16b3f1938411a273568c3f420ea843d8d85119ea`; the quote sits at range 384 to 490 of the normalized agreement text.
 
 2. Scan the mutated fixture (imports `@ai-sdk/openai`):
 
@@ -67,10 +73,10 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 ```
 ```
 FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
-  lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 policy card status: draft, pending counsel approval
+  lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:91628c3e4d3cc1a492a76f36b05f76359e26b951057291a8155027f8258a4711
+result sha256:aeb4ec4bc16fd9445749840caf06000bd44e22847229b6e1b1d0e6ff31351b7b
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -85,15 +91,21 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:2193e6e2c1b4253add0b4f474c2ced92ea95d0b3fd37c1f8b1a197f00991989e
+result sha256:a9871fb72578b71da9b63cb61f6a87af3841d129afee044039c667422ab02bad
 ```
 
 4. Diff the two runs:
 
 ```
-npm run -s curb -- diff --before $W/before.json --after $W/after.json
+npm run -s curb -- diff --card $CARD --before $W/before.json --after $W/after.json
 ```
 ```
+# Curb rerun delta
+
+> Policy card status: **draft, pending counsel approval**
+
+This compares two scoped Curb results from the same control set. It is not a compliance statement, legal advice or a certification.
+
 State: **FAIL** to **PASS**
 ...
 ## Fixed (1)
@@ -119,10 +131,12 @@ npm run -s curb -- report --card $CARD --agreement $AGR --obligation $W/obligati
 ## Result
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
+
+Rule: `unapproved-provider-reference` v`1.0.1`. Files evaluated: 2.
 ...
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
-| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `8e2e874dd38c` |
+| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `39cdc58dd2b5` |
 ```
 
 The report also lists the confirmed obligation, exclusions and every input hash (result, tree, agreement, obligation, policy card, evaluator version), then the run envelope (start and finish time, operator, tenant). The envelope is outside the hash, so those times differ between runs.
@@ -136,6 +150,16 @@ npm run -s curb -- audit --store $W/store
 tenant: demo  entries: 3
 audit chain OK
 ```
+
+A store or tenant with no log is refused rather than reported as an empty, verified chain:
+
+```
+npm run -s curb -- audit --store $W/stor
+```
+```
+curb: no audit log found for tenant "demo" in store "$W/stor"
+```
+(exit code 2)
 
 Pointing `--store` inside the scanned repo is refused with exit code 2:
 
@@ -151,25 +175,33 @@ Precedence for an evaluated scan: `error > fail > unknown > pass`.
 |---|---|---|
 | `pass` | Every in-scope file parsed, at least one file was evaluated, and no reference outside the allowlist was found. Scope-limited evidence, not compliance. | no findings, no unknown files, at least one file evaluated |
 | `fail` | At least one reference to a registered provider outside the allowlist. One finding per occurrence. | at least one finding |
-| `unknown` | Something could not be checked and nothing failed: a non-excluded file is unparseable, generated or minified, in an unsupported language, or over the size cap; or no file could be evaluated (note `no-evaluable-files`). Affected files are listed. | at least one unknown file, or the note `no-evaluable-files` |
+| `unknown` | Something could not be checked and nothing failed: a non-excluded file is a symlink, unparseable, generated or minified, of a file type that is neither analyzed nor on the ignorable list, or over the size cap; or no file could be evaluated (note `no-evaluable-files`). Affected files are listed. | at least one unknown file, or the note `no-evaluable-files` |
 | `not-applicable` | A named human recorded applicability `not-applicable` on the obligation. The evaluator never returns this state; the scan skips evaluation and notes `human-recorded-not-applicable`. | no findings, no unknown files, zero files evaluated |
-| `error` | The evaluator threw. Not a verdict and never a pass. The exception text goes to stderr only, not into the result file. V1 has no evaluator timeout; the per-file size cap bounds work. | no findings, zero files evaluated |
+| `error` | The evaluator threw outside per-file analysis (a failure inside one file makes that file `unknown`). Not a verdict and never a pass. The exception text goes to stderr only, not into the result file. V1 has no evaluator timeout; the per-file size cap bounds work. | no findings, zero files evaluated |
 
 `report` refuses a `not-applicable` result for an obligation that applies, and a verdict for an obligation recorded as not-applicable. Reasoning: `docs/curb/adr-001-result-schema.md`.
 
 ## What the evaluator checks
 
-Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` files, it flags:
+Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` files (extension matched case-insensitively, declaration files included), it flags:
 
-1. Import and `require` specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/*`).
-2. URL literals whose host is a registered provider host.
-3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) that resolves to a registered provider.
+1. Import, `require`, `require.resolve`, dynamic `import()` and import-type (`typeof import('openai')`, `import('openai').T`) specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/*`).
+2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
+3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
 
-A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Default exclusions (`node_modules`, `.next`, `dist`, lockfiles) are recorded in every report.
+Which files are looked at:
+
+- Only the TypeScript and JavaScript extensions above are analyzed.
+- These types are never scanned (an allowlist of non-code files): `.md` `.markdown` `.txt` `.rst` `.json` `.jsonc` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.env` `.lock` `.log` `.csv` `.tsv` `.xml` `.svg` `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.ico` `.bmp` `.tiff` `.woff` `.woff2` `.ttf` `.otf` `.eot` `.pdf` `.zip` `.gz` `.tar` `.tgz` `.map` `.css` `.scss` `.sass` `.less` `.sql` `.graphql` `.gql` `.prisma`, plus the suffix-like `.local` `.example` `.sample` `.template` `.dist` (so `.env.local` is skipped). Their size and readability do not matter.
+- Every other extension (`.py`, `.ps1`, `.coffee`, `.vue`, `.svelte`, ...) makes the file `unknown` (`unsupported-language`), so an unlisted language can never read as a pass. An extensionless file is `unknown` only if it starts with `#!` (after an optional BOM); `Makefile`, `LICENSE` and dotfiles such as `.env` are skipped.
+- Binary content (a NUL byte in the first 8 KiB) is not analyzed: `unknown` under a TypeScript or JavaScript extension, skipped otherwise.
+- A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
+
+A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
 It does not check, and the card lists these as non-claims: which provider receives data at runtime, provider conduct, retention or training use, dead code, proxy rerouting, or whether the allowlist matches the signed agreement.
 
-False-negative classes (full list in `policies/unapproved-provider-reference.v1.json`): providers missing from the registry; dynamic specifiers (`require(name)`); model identifiers held in variables or environment files; wrapper modules hiding the real provider; URLs built by concatenation or template literals; hosts without a scheme or as subdomains; model IDs passed anywhere but the first literal argument of a declared constructor; aliased constructors; `.md`, `.json`, `.yaml` and `.env` files (not scanned). Known false positives: provider imports in test-only or never-executed code.
+False-negative classes (full list in `policies/unapproved-provider-reference.v1.json`): providers missing from the registry; dynamic specifiers (`require(name)`); model identifiers held in variables or environment files; wrapper modules hiding the real provider; URLs built by concatenation or template literals; hosts without a scheme or as subdomains; model IDs passed anywhere but the first literal argument of a declared constructor; aliased constructors; code inside never-scanned file types; `createRequire(...)('openai')`; `declare module 'openai'`; tagged-template constructor calls; test mocks such as `vi.mock('openai')`; path or bundler aliases that rename a package; anything inside a `.git` directory. Known false positives: provider imports in test-only or never-executed code.
 
 ## Trust model
 
