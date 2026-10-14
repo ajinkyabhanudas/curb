@@ -1,0 +1,5 @@
+{
+  "name": "fixture-chat-app",
+  "private": true,
+  "dependencies": { "ai": "^5.0.0", "@ai-sdk/anthropic": "^2.0.0" }
+}

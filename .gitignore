@@ -82,3 +82,10 @@ pnpm-debug.log*
 *.swp
 .DS_Store
 Thumbs.db
+
+# ---- Curb engine ----
+engine/node_modules/
+.curb/
+
+# ---- Curb SDD working notes ----
+.superpowers/

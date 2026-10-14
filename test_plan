@@ -1,0 +1,413 @@
+# Curb V1 implementation plan
+
+**Purpose:** build a narrow, production-quality vertical slice that turns a signed agreement's explicitly selected, supported AI/data-handling commitments into reproducible engineering checks, findings, evidence, and re-verification.  
+**Planning status:** implementation plan, not legal advice or a compliance certification.  
+**Prepared:** 13 October 2026 (Europe/London).  
+**Initial proving ground:** a pinned, isolated fork of [Vercel Chatbot](https://github.com/vercel/chatbot), formerly AI Chatbot.  
+**Illustrative source:** [Common Paper AI Addendum v1.0](https://commonpaper.com/standards/ai-addendum/1.0), only as an open, versioned example of agreement structure and terminology.
+
+## 1. Decision and product position
+
+Build Curb as an **evidence-based contract-control verifier for a small, declared catalog of machine-testable commitments**. It should answer: “For this agreement snapshot and this repository revision, what evidence supports or contradicts each supported control?” It should not answer: “Is this company legally compliant?”
+
+The first usable experience is intentionally small:
+
+1. An authorized customer connects one repository and uploads or selects one agreement snapshot.
+2. A lawyer or authorized operator selects and confirms supported commitments from the extracted text; Curb never silently treats model output as a binding obligation.
+3. Curb maps each confirmed commitment to one or more versioned technical controls.
+4. A deterministic scan produces pass, fail, unknown, or not-applicable, with code/config evidence and a reproducible run manifest.
+5. A developer fixes a finding, Curb reruns the same control set against the new immutable commit, and the report shows the delta.
+
+This is a developer-facing assurance workflow, not a contract authoring product, legal opinion engine, general-purpose GRC suite, runtime DLP system, or automated regulator submission service. The positioning must say “checks configured engineering evidence against confirmed contract requirements,” never “ensures compliance.”
+
+### Feasibility is not demand
+
+The Vercel fixture can demonstrate technical feasibility, evaluator quality, workflow usefulness, and repeatability. It cannot demonstrate that customers will pay, that legal teams accept the workflow, that a contract category is commercially urgent, or that findings alter procurement outcomes. Those are product-market-demand hypotheses. Maintain separate evidence tracks:
+
+| Claim | Evidence required | Decision owner |
+|---|---|---|
+| A supported control can be checked accurately | Locked Curb Bench cases; unseen holdout performance | Engineering + security |
+| Findings are actionable | Time-to-remediate and developer usability study | Product + engineering |
+| Customers value the workflow | Design-partner interviews, pilots, willingness-to-pay signal | Founder/product |
+| Agreement interpretation is sound | Counsel-approved policy cards and review workflow | Qualified counsel |
+
+No technical benchmark score may be presented as proof of legal compliance or market demand.
+
+## 2. Current upstream basis and provenance
+
+This plan records sources as of 13 October 2026. Each benchmark run must recapture the referenced source revision, license text/checksum, retrieval time, and attribution in `source-manifest.json`; upstream can change.
+
+| Source | Verified current basis | Use in Curb | License/lineage treatment |
+|---|---|---|---|
+| [vercel/chatbot](https://github.com/vercel/chatbot) | Active public template; current `main` package metadata identifies Next.js 16, React 19, TypeScript, pnpm, Drizzle, Playwright, Biome, Husky, OpenTelemetry and AI SDK dependencies. Its [LICENSE](https://github.com/vercel/chatbot/blob/main/LICENSE) states Apache-2.0. | Reference application and controlled benchmark fixture, never an assertion about Vercel’s practices. | Pin a full commit SHA before every fixture build; retain NOTICE/license; keep local fixture modifications independently documented; do not imply Vercel endorsement. Re-validate license/NOTICE before redistribution. |
+| [CommonPaper/AI-Addendum](https://github.com/CommonPaper/AI-Addendum) and [hosted v1.0 terms](https://commonpaper.com/standards/ai-addendum/1.0) | Official, versioned standard terms released 7 August 2025. The official page says CC BY 4.0 and explains that the cover page carries agreed modifications. | Illustrative clause vocabulary, contract-format fixture, and provenance example. | Attribute Common Paper, URL, version and CC BY 4.0. Preserve version. Do not represent a template clause as executed or applicable to a customer. Check repository licensing separately, because GitHub metadata may not identify a repository-level license. |
+| [Vercel AI SDK](https://github.com/vercel/ai) | Provider-agnostic TypeScript toolkit; current docs/repo describe a unified provider architecture. | A code-pattern corpus only; provider routing is a relevant analyzable surface. | Pin dependencies and record lockfile resolution; do not infer actual provider behavior from SDK imports alone. |
+
+The Common Paper source supports no invented obligations. Curb must capture the actual agreement, cover page/amendments, incorporation-by-reference URLs, version, effective date, selected options, and any negotiated changes. A human with authority must confirm which obligations enter the control catalog.
+
+## 3. V1 boundary
+
+### In scope
+
+- GitHub-hosted TypeScript/Node repositories, initially the Vercel fixture and then opt-in design-partner repositories.
+- Static repository and configuration analysis at a pinned Git commit; optional CI pull-request check.
+- Agreements supplied as text-native PDF, DOCX, or Markdown plus manually entered/preserved metadata.
+- A small contract-to-control catalog covering only explicit, reviewer-confirmed commitments with observable repository/config evidence.
+- Deterministic checks, signed/hashed evidence records, developer remediation guidance, reruns, and exportable Markdown/JSON reports.
+- Tenant-scoped access, audit trail, retention controls, and a public reproducible benchmark that carries only synthetic/public inputs.
+
+### Explicitly out of scope for V1
+
+- Legal advice, legal conclusion, certification, regulator reporting, or complete EU AI Act/GDPR/SOC 2/ISO 27001 coverage.
+- Inferring a binding obligation from an LLM extraction, an unverified document, or a model/provider name.
+- Proving runtime behavior, vendor internals, data residency, training use, deletion, authorization, or human review solely from source code.
+- Reading production prompts, customer data, secrets, private provider logs, or repositories without a documented authorization path.
+- Autonomous remediation, merging PRs, changing provider settings, or blocking deployment by default.
+- Multi-language/source-binary analysis, mobile clients, infrastructure clouds beyond declared config, and third-party vendor assurance beyond recorded evidence.
+
+An unsupported commitment is shown as **unsupported or requires external evidence**, not as pass/fail. Lack of static evidence is **unknown**, not non-compliance.
+
+## 4. Product principles and legal review gates
+
+1. **Contract first, code second.** No control runs until an agreement snapshot and a confirmed obligation are linked.
+2. **Determinism for verdicts.** LLMs may assist intake and navigation; only versioned deterministic rules issue machine findings.
+3. **Evidence, not assertions.** Every result links the exact input hashes, commit, rule version, locations, and execution environment.
+4. **Least access and least retention.** Prefer GitHub App read-only content access and redacted metadata; never persist source unnecessarily.
+5. **Fail honest.** Ambiguity, parse failure, unavailable permissions, generated/minified code, or unsupported language yields unknown/needs review.
+6. **Reproducibility before cleverness.** A benchmark case is a signed fixture + policy card + expected verdict, not a chat transcript.
+7. **Human accountability.** Contract applicability and exceptions require named human approval; reports identify approver, not an opaque AI decision.
+
+### Required review gates
+
+| Gate | Required before | Owner and evidence |
+|---|---|---|
+| Source and license review | Copying, publishing, or redistributing fixtures | Engineering + counsel/authorized reviewer; SPDX/attribution manifest |
+| Legal applicability review | Activating a commitment for a tenant | Customer legal/authorized business owner; signed or recorded confirmation |
+| Policy-card approval | Releasing a new control | Counsel/policy owner + security/engineering; scope and known blind spots |
+| Security/privacy review | Production tenant onboarding | Security owner; DPIA/assessment as applicable, retention and access review |
+| Benchmark release review | Publishing Curb Bench corpus or scores | Maintainer; license, secret scan, leakage, reproducibility review |
+| Enforcement review | Blocking CI/deployments | Customer admin; staged observe-only results and false-positive review |
+
+## 5. What is deterministic and what an LLM may do
+
+| Function | Permitted method | Output status |
+|---|---|---|
+| PDF/DOCX extraction, hashing, structure preservation | Deterministic parser/OCR with source offsets | Evidence; parser confidence only |
+| Clause segmentation and candidate matching | LLM or deterministic retrieval, explicitly labeled | Draft suggestion; cannot activate a control |
+| Obligation confirmation, applicability, exceptions | Authorized human using source citation | Authoritative product record |
+| Code/config collection and rule evaluation | Deterministic AST, data-flow where supported, schema and path checks | Pass/fail/unknown/not-applicable |
+| Finding prose and remediation draft | Templated content; optional LLM with no secrets/source beyond minimum | Non-authoritative assistance, reviewable |
+| Report verdict and audit log | Deterministic assembly from approved inputs | Authoritative within stated scope |
+
+LLM protections: disable provider training where available under the chosen processor terms; redact secrets before prompts; constrain retrieval to tenant/document scope; record model/version/prompt template/input hashes; require structured schema; label uncertainty; forbid external browsing/tool execution; allow customer opt-out. If these controls cannot be demonstrated, disable LLM features and preserve a manual intake route.
+
+## 6. Reference architecture and data model
+
+### Logical flow
+
+`authorized source → immutable snapshot → human-confirmed obligation → versioned policy card → deterministic evaluator → evidence bundle → review/remediation → rerun/delta → report/audit log`
+
+Services can begin as a modular monolith with a queue worker, object storage and Postgres. Split only after measured pressure. A proposed initial stack is TypeScript, Postgres, a queue, an S3-compatible encrypted object store, a GitHub App, an isolated worker runner and OpenTelemetry. This is an implementation choice to validate, not a requirement to mimic Vercel Chatbot.
+
+### Core entities
+
+| Entity | Immutable keys / essential fields |
+|---|---|
+| Tenant, user, role, service principal | tenant ID, identity provider subject, RBAC grants, audit events |
+| Repository connection | tenant, GitHub installation/repository IDs, allowed refs, consent/access timestamp |
+| Repository snapshot | commit SHA, tree hash, source-manifest hash, language inventory, acquisition mode, expiry |
+| Agreement snapshot | encrypted original pointer, SHA-256, extracted text/offset map, document type, effective date, execution status, lineage links |
+| Obligation | agreement snapshot, exact cited text/range, normalized candidate, applicability, confirmation/exception approvals, confidence and status |
+| Policy card | semantic ID, version, supported wording patterns, preconditions, control mappings, non-claims, counsel approval |
+| Control and evaluator version | rule ID, OCI/image digest, inputs, rule config, timeout/resource limits, output schema |
+| Run and result | input hashes, started/finished timestamps, statuses, finding IDs, evidence refs, operator/trigger |
+| Finding | rule/evaluator version, severity rubric, result state, locations, rationale, remediation template, triage/waiver lifecycle |
+| Evidence artifact | content hash, media type, provenance, retention class, encrypted storage pointer, access log |
+| Report | report version, scope statement, result snapshot hash, signature, export/access events |
+| Benchmark case | public fixture ref, mutation ID, policy-card ref, oracle, split, license manifest |
+
+Use append-only audit events. Store document/source blobs separately from product metadata; encrypt per tenant with envelope encryption and scoped keys. Never put raw secrets in logs, report exports, vector stores, or benchmark fixtures.
+
+## 7. First control catalog
+
+The catalog is deliberately small. Names below are technical control hypotheses, not verified legal obligations. Activate one only when the customer’s exact agreement text and counsel-approved policy card support it.
+
+| Control ID | Potential evidence Curb can inspect | Deterministic V1 method | Cannot establish |
+|---|---|---|---|
+| `provider-allowlist-configured` | provider/model routing config, environment schema, declared gateway allowlist | Parse supported config and compare exact normalized provider IDs to approved set | Actual network destination or provider conduct |
+| `unapproved-provider-reference` | AI SDK/provider imports, endpoint URLs, model identifiers | AST/string/config rule with provenance and allowlist | Whether dead code executes or a proxy reroutes traffic |
+| `sensitive-log-sink-prohibited` | logging calls around prompt/input variables and log transport config | AST sink/source patterns, path allow/deny, fixtures | Full semantic sensitivity classification or runtime redaction |
+| `retention-config-present` | explicit retention/TTL settings in supported storage/config | Schema/path rule with value range and evidence | Actual deletion or downstream copies |
+| `human-review-gate-present` | code/config that routes declared high-impact workflow to review state | State-machine/config signature in a supported integration | Adequacy of human oversight in practice |
+| `model-change-approval-recorded` | pinned model config plus approved manifest/change record | Compare snapshot config to signed approved manifest | Whether approval was legally sufficient |
+
+Every policy card must state: approved text patterns, exact interpretation, required contextual facts, rule prerequisites, false-positive examples, false-negative risks, evidence boundaries, severity, owner, review date, and test cases. Avoid a generic “sensitive data” classifier in V1; use explicitly labeled fixture variables and documented code patterns.
+
+## 8. Threat model and security controls
+
+### Assets and adversaries
+
+Assets include private source, agreement text, tokens, reports, benchmark oracles, tenant identity, and audit integrity. Threat actors include an outside attacker, malicious tenant member, compromised GitHub App token, curious operator, dependency compromise, prompt injection in a contract/repository, and a benchmark participant optimizing to public tests.
+
+| Threat | Primary controls | Verification |
+|---|---|---|
+| Cross-tenant source or report disclosure | tenant-bound authorization at every query/object access; row-level isolation; per-tenant encryption keys; access tests | automated isolation suite; periodic access-log review |
+| GitHub token misuse | GitHub App installation tokens, read-only minimum scopes, short lifetime, encrypted storage, repository allowlist and revocation | integration test; revoke drill |
+| Secret ingestion/exfiltration | pre-scan secret detection, path exclusions, redaction, no raw code in logs/LLM, quarantine | seeded-secret tests; DLP log scan |
+| Prompt injection in documents/code | treat content as data; schema-constrained extraction; no tool privileges; human confirmation | adversarial corpus, no-action test |
+| Malicious repository build | do not execute repository code; parse in isolated sandbox; network deny; readonly mount; quotas | sandbox escape and egress test |
+| Rule tampering/evidence forgery | signed releases, pinned container digests, hash chain, append-only audit log, two-person policy release | tamper simulation |
+| Benchmark leakage/overfitting | private holdouts, mutation generation, separated maintainers, commit embargoes | contamination scan, holdout access audit |
+| Availability/cost abuse | queue quotas, size/time limits, rate limits, cancellation, backpressure | load and chaos tests |
+
+Baseline controls: SSO/OIDC for internal users, MFA for privileged roles, RBAC (viewer, developer, policy reviewer, tenant admin, platform operator), least privilege, secrets manager, dependency/SBOM scanning, signed CI artifacts, immutable backups, deletion workflows, incident response runbook, and regular restore exercises.
+
+## 9. Curb Bench: reproducible validation harness
+
+Curb Bench is a product-quality test harness, not a claim about real-world prevalence. It must be open only where licensing permits and must never include a design partner’s private code, agreement, prompt, credentials, or provider logs.
+
+### Case format
+
+Each case contains: `fixture-ref` (pinned upstream and patch series), `source-manifest.json`, `agreement-fixture.md` (synthetic or licensed), `policy-card-ref`, mutation patch, expected verdict(s), expected evidence paths, known limitations, evaluator image digest, and `case-manifest.json` hashes. Oracle authors and evaluator implementers are separated when practical.
+
+### Fixture strategy
+
+1. Create a clean, pinned Vercel Chatbot baseline and record its commit SHA/license/NOTICE/dependency lock hash.
+2. Do not call the baseline compliant. Label it `reference-baseline/no-contract-verdict`.
+3. Create synthetic agreement fixtures that each activate one approved policy card; never describe them as Common Paper’s legal effect.
+4. Add small, reviewable mutations: unapproved model/provider ID, prompt-like variable sent to an unsupported logger, missing declared retention configuration, removed review-gate config, and approved-manifest drift.
+5. Build positive, negative, near-miss, irrelevant-lookalike, parser-error, and unsupported-language cases per rule.
+6. Publish a public development split; keep license-clean, access-controlled holdouts that are never shipped with the CLI or evaluator container.
+
+### Leakage controls and unseen-repo protocol
+
+- Freeze case IDs and expected outputs before implementation; keep holdout mutation patches/private or access-controlled.
+- Version benchmark rules independently from fixture content; no code path may inspect case name, oracle files, or benchmark metadata during evaluation.
+- Run evaluator on a clean checkout copied into a sealed working directory with network egress disabled.
+- Evaluate at least two unseen repositories or independently authored fixtures before an external claim. They must not have been used to write patterns, prompts, rule tests, or remediation templates.
+- Use a preregistered evaluation script that takes only snapshot, enabled policy cards and evaluator version; publish aggregate metrics and error taxonomy, not private code.
+- Have a separate reviewer inspect commits, package caches, training/retrieval corpora, and prompts for holdout leakage. Any suspected leakage invalidates that score and triggers a new split.
+
+### Provisional thresholds and rationale
+
+These are release hypotheses, not legal standards. They prioritize avoiding a misleading “pass” and are revisited after 20+ adjudicated cases per released rule.
+
+| Measure | V1 target | Rationale / action if missed |
+|---|---:|---|
+| Deterministic rerun agreement | 100% identical verdict/evidence hashes for same image+inputs | Reproducibility is foundational; block release on miss. |
+| Critical-rule recall on locked holdout | 100% (with Wilson lower bound reported) | A missed known critical mutation undermines use; rule remains preview if missed. |
+| Critical-rule precision on locked holdout | >=95%, with all errors triaged | Reduce alert fatigue; refine patterns/scope, do not lower silently. |
+| All released-rule precision | >=90% | Initial usability guard; publish numerator/denominator and confidence interval. |
+| Unknown classification on unsupported/ambiguous cases | 100% | Prevent false certainty; any false pass fails the gate. |
+| Evidence completeness | 100% findings link rule, commit, location/range or reason unavailable, hashes, and timestamps | Auditability requirement. |
+| Median static scan latency | <=10 minutes for fixture-scale repo, p95 <=30 minutes | Enough for PR feedback; measure on declared hardware. |
+| Remediation validation | >=80% of seeded fixes flip only intended finding in harness | Tests actionability; investigate collateral changes. |
+
+## 10. Prototype decision tree
+
+Do not rewrite the existing form-to-PDF assessment prototype by reflex. Complete a time-boxed audit first and decide per component.
+
+```text
+Inventory prototype code, tests, deployments, dependencies and data flows
+  |
+  +-- Has it handled production/customer data or live credentials?
+  |      +-- Yes: isolate, rotate/revoke where appropriate, preserve audit evidence; security review before reuse.
+  |
+  +-- Does a component satisfy a V1 capability with tests and compatible security model?
+  |      +-- Yes: reuse behind an adapter; add contract tests and ownership.
+  |      +-- No
+  |          +-- Is it a low-risk UI/reporting shell with separable presentation layer?
+  |          |      +-- Yes: retain temporarily; replace only the incompatible boundary.
+  |          |      +-- No: archive/tag read-only and replace incrementally.
+  |
+  +-- Is scope/model fundamentally form-to-PDF rather than evidence/snapshots/rules?
+         +-- Yes: do not extend as core engine; extract only proven reusable utilities.
+```
+
+**Audit output:** an inventory table for each module with function, test coverage, dependencies/license/CVE status, secrets/data exposure, architecture fit, migration cost, decision (reuse/adapt/archive/revert), named owner, and rollback point. “Revert” means restoring a known tagged deployment/database migration plan after backup validation, not deleting history. No irreversible database migration or production overwrite occurs until the audit is approved.
+
+## 11. Phased implementation plan
+
+### Phase 0 — charter, source capture and prototype audit (1–2 weeks)
+
+**Entry:** named product, technical, security and legal/policy owners; authority to inspect the prototype and public sources.  
+**Tasks:**
+
+1. Write a one-page charter: target user, single workflow, supported repository type, non-claims, risk owner and success hypothesis.
+2. Freeze the upstream inputs: commit SHAs, raw license/NOTICE files, checksums, source URLs, retrieval time, dependency lockfile and attribution statement.
+3. Audit the existing prototype with the decision tree; map database schema, auth, uploads, report generation, deployed environments, analytics, credentials and tests.
+4. Inventory all data; ensure no real customer document/code is copied into a benchmark or test environment.
+5. Select one synthetic policy card and one fixture mutation for the first vertical slice; obtain policy/counsel approval.
+6. Define severity rubric and result taxonomy: pass/fail/unknown/not-applicable/error; document that `pass` is scope-limited evidence, not legal compliance.
+7. Establish repositories: product, private evaluator/rules, public bench (if released), ADRs, threat model and issue tracker.
+
+**Tests/evidence:** source manifest verification; dependency and secret scans; prototype smoke test; legal/source review checklist; architecture decision record.  
+**Exit:** signed-off charter, approved source lineage, prototype reuse/adapt/archive decision, and one approved policy card.  
+**Stop condition:** no authority to use a source or no human owner for obligation approval.
+
+### Phase 1 — vertical-slice foundation (2–3 weeks)
+
+**Goal:** a local/demo workflow that produces one deterministic finding from a synthetic agreement and pinned Vercel fixture mutation.
+
+1. Scaffold modular-monolith API, worker, Postgres schema, encrypted object storage adapter and local developer environment.
+2. Implement tenant, roles, immutable snapshot IDs and append-only audit-event interface; use a synthetic tenant in tests.
+3. Implement repository snapshot importer for local fixture first; compute commit/tree/file hashes and deny execution/network access.
+4. Implement Markdown agreement ingestion with offset-preserving text, SHA-256 and immutable raw artifact pointer.
+5. Implement human-confirmed obligation form: exact quote/range, policy-card selection, applicability, approver identity/time and optional exception.
+6. Implement one policy card: `unapproved-provider-reference` with exact preconditions and allowlist configuration.
+7. Implement AST/config deterministic evaluator in a sandbox with stable sorted output.
+8. Render a minimal finding page and JSON/Markdown evidence report; include rule version, commit and limitations.
+
+**Tests:** unit tests for hash/offsets/result schema; evaluator positive/negative/near-miss cases; snapshot sandbox test; tenant authorization test; golden-report test; rerun determinism test.  
+**Exit:** one click/demo path from agreement fixture to confirmed obligation to deterministic finding, rerun and report; same inputs yield byte-identical canonical JSON.  
+**Gate:** no LLM is necessary or permitted for the verdict in this phase.
+
+### Phase 2 — Curb Bench and evaluator quality (2–4 weeks)
+
+**Goal:** establish a trustworthy harness before expanding scope.
+
+1. Fork/pin Vercel fixture lawfully; retain source manifest and attribution; create a patch-stack generator rather than manually edited drift.
+2. Define benchmark manifest, oracle schema, runner CLI, image digest capture and clean-room evaluation mode.
+3. Add at least 10 cases for rule one: positive, negative, near-miss, unsupported, generated/minified, parse failure and irrelevant lookalikes.
+4. Create public development split and private holdout process; assign an independent reviewer for oracle leakage checks.
+5. Add mutation tests that prove the evaluator catches intended changes and does not fire on non-target changes.
+6. Add two more controls only after each policy card approval: provider allowlist/config and model-change approved-manifest drift.
+7. Build scorecard with confusion matrix, unknown rate, run determinism, evidence completeness, latency and error taxonomy.
+
+**Tests:** isolated runner, no-network test, oracle blindness test, source license scan, case reproducibility on a fresh machine/container, differential test across file ordering/line endings.  
+**Exit:** locked, reproducible harness; thresholds met for first rule; benchmark release decision signed.  
+**Gate:** rule expansion pauses if unknown cases become passes or any holdout is exposed.
+
+### Phase 3 — contract intake with human control (2–3 weeks)
+
+**Goal:** make real agreement intake safe without turning extraction into legal interpretation.
+
+1. Add text-native PDF, DOCX and Markdown ingestion with malware/type validation, size limits, encrypted originals and text/offset maps.
+2. Detect cover page, addendum, amendment and incorporation references as documents/metadata, not automatically binding conclusions.
+3. Add optional LLM-assisted clause suggestions behind feature flag, schema validation, redaction and strict tenant-scoped retrieval.
+4. Build reviewer UX for side-by-side source quote, candidate normalization, supported policy-card match, applicability question, approval and exception record.
+5. Add “unsupported / needs counsel” workflow and report language; no forced mapping.
+6. Add agreement snapshot versioning, supersession and re-confirmation when text or policy cards change.
+
+**Tests:** malformed/encrypted/scanned document handling; prompt-injection corpus; redaction test; access-control test; manual-review audit trail; parser offset accuracy sampling.  
+**Exit:** authorized reviewer can create a defensible, cited obligation record or explicitly decline mapping.  
+**Gate:** do not enable external LLM processing until data processing, retention and opt-out decisions are approved.
+
+### Phase 4 — developer workflow, remediation and CI (3–4 weeks)
+
+**Goal:** make findings useful in day-to-day engineering.
+
+1. Add GitHub App OAuth/install flow, repository picker, default-branch/PR snapshot acquisition and webhook signature validation.
+2. Add pull-request check in observe-only mode: status summary, deep links, affected-control diff, new-vs-existing finding classification and no merge block.
+3. Add remediation templates that cite policy-card conditions and rule limits; never apply code automatically.
+4. Add finding triage: acknowledge, false positive, waived/exception, fixed, and expired waiver with required reason/approver.
+5. Add rerun-on-commit and report delta; preserve old findings and evidence immutably.
+6. Add signed report export (Markdown/JSON initially) with scope, evidence inventory, unknowns, waivers and non-claims.
+7. Graduate CI enforcement only for a control after observed precision threshold, customer approval and rollback switch.
+
+**Tests:** webhook replay/idempotency; PR diff test; permission revocation; remediation seeded-fix suite; report integrity; CI fail-open/fail-closed feature-flag drills.  
+**Exit:** a developer can receive, understand, resolve and verify a seeded finding through a PR without an operator.  
+**Gate:** no CI blocking when evaluator unavailable, evidence incomplete, contract mapping pending, or control is preview.
+
+### Phase 5 — production hardening and design-partner pilot (4–6 weeks)
+
+**Goal:** safely validate the vertical slice with a small number of authorized design partners.
+
+1. Complete external security review, privacy/retention configuration, incident response, backup/restore and deletion workflows.
+2. Add organization SSO where required, role management, SCIM roadmap decision, customer-managed retention settings and audit export.
+3. Implement monitoring, on-call ownership, SLOs, runbooks, status communication and support escalation.
+4. Onboard 2–5 design partners under written pilot terms; use their confirmed agreements and repositories only with authorization.
+5. Run shadow mode for at least two weeks per partner; adjudicate every high/critical finding with the partner and policy owner.
+6. Measure workflow outcomes, false positives, time-to-triage, remediation rate and evidence usefulness. Run structured discovery interviews separately from technical measurement.
+7. Decide which controls graduate, remain preview, or are removed. Do not expand to broad frameworks to compensate for weak signal.
+
+**Tests:** penetration test/targeted abuse review, restore drill, deletion verification, token revoke drill, queue/load test, disaster-recovery tabletop, support runbook exercise.  
+**Exit:** all release thresholds met, no unresolved critical security issue, partner approval of report clarity, and independent demand evidence.  
+**Gate:** a failed security/tenant-isolation test blocks production onboarding.
+
+## 12. CI/CD, quality and operational design
+
+### Delivery pipeline
+
+Every change runs formatting/type checks, unit tests, integration tests against ephemeral Postgres/object-store fakes, evaluator corpus tests, benchmark development split, dependency/SBOM scan, secret scan, SAST, container/image scan, migration compatibility test and golden-report comparison. Protected branches require review, signed/attested artifacts where available, pinned action/dependency versions, and a release manifest.
+
+Rules and policy cards are released independently but compatibly: a rule package has semantic version, evaluator image digest, schema version, benchmark score and approval record. A policy card cannot point at a rule version outside its tested compatibility range. Roll out new rules in shadow mode, compare with prior version, then expose as preview; only then graduate after thresholds and owner approval.
+
+### Observability and SLOs
+
+Instrument request IDs, tenant-safe run IDs, queue age, scan stage, evaluator version, input sizes/hashes, result states, errors, access decisions, webhook deliveries and export generation. Do not log raw agreement text, source code, prompts or tokens by default.
+
+Initial service targets: 99.5% monthly availability for core UI/API (excluding scheduled maintenance); 99% of accepted fixture-scale runs start within 5 minutes; p95 finish within 30 minutes; 100% audit events retained per configured policy; zero cross-tenant reads. These are operational hypotheses, revised after pilot load testing. Alert on tenant-boundary violations, abnormal download/access patterns, evaluator error spikes, queue backlog, rule score regression, source-parser changes and secret detector hits.
+
+### Failure, rollback and incident behavior
+
+- **Ingestion failure:** preserve original only if accepted by retention policy; expose error and request safe retry. Never fabricate text/offsets.
+- **Evaluator error or timeout:** return `error`/`unknown`, retain diagnostics without sensitive content, do not issue pass or block CI.
+- **Rule regression:** disable via feature flag, pin last known-good evaluator, mark affected reports superseded and notify scoped customers.
+- **Bad policy mapping:** revoke mapping, rerun affected reports, maintain historical record and corrected report with explanation.
+- **Access/token compromise:** revoke app installation/token, invalidate sessions, rotate credentials, investigate audit trail, notify per incident process.
+- **Data deletion request:** authenticate requester, queue tenant-scoped deletion/tombstone, verify object/index/cache removal and retain minimum legally required audit metadata only if approved.
+- **Database migration failure:** use tested backward-compatible migrations; pause workers, restore from verified backup only under incident approval; never run destructive migration without recovery rehearsal.
+
+## 13. UX specification for the vertical slice
+
+The primary user is a developer asked to substantiate an AI/data-handling commitment; the secondary user is a legal/policy reviewer. The UX should make uncertainty obvious rather than appearing authoritative.
+
+1. **Connect and scope:** repository, branch/commit, agreement snapshot, access/retention notice.
+2. **Confirm obligations:** original quote at left; candidate mapping and plain-language technical boundary at right; approve, edit, mark unsupported or request counsel.
+3. **Run overview:** snapshot identifiers, active policy cards, progress, limitations and cancellation.
+4. **Finding detail:** result state, severity, exact evidence, rule version, why it triggered, what it cannot establish, remediation suggestions and triage/exception workflow.
+5. **PR view:** only new/changed findings, prior baseline, rerun control, no deceptive green “compliant” badge.
+6. **Report:** scope and non-claims first; confirmed obligations, result table, evidence links, unknowns, waivers, history and export checksum.
+
+Accessibility: keyboard operation, clear focus, semantic tables, WCAG 2.2 AA target, color-independent status labels, readable exports, and no legal result indicated only by color.
+
+## 14. Metrics, pilots and go/no-go
+
+### Product and quality dashboard
+
+Track onboarding completion; time from connection to first reviewed finding; scan success; per-control precision/recall/unknown rate; evidence completeness; time-to-triage; time-to-remediate; waiver rate and expiry; rerun rate; developer/reviewer task success; report export/use; security events; and pilot conversion signals. Segment technical quality from commercial signal.
+
+### Go/no-go checklist
+
+**Go to limited pilot only if:**
+
+- The prototype audit has a documented decision and no unmanaged live-data risk.
+- At least one policy card and evaluator meet the locked-holdout thresholds, including 100% unknown behavior for out-of-scope cases.
+- Benchmark, reports and source manifests reproduce from clean environment.
+- Tenant isolation, token revocation, secret redaction, backup/restore and deletion drills pass.
+- Scope language, legal review workflow and reports are approved by accountable owners.
+- At least two authorized users complete the seeded workflow without operator intervention.
+
+**No-go / pause if:** any cross-tenant exposure; uncontained secret exfiltration; false pass for a known unsupported/ambiguous case; unreproducible verdict; absent legal/policy owner; unclear source rights; or unresolved critical evaluator-security defect. Pause scope expansion if pilots cannot explain findings or do not show a concrete workflow need.
+
+**Go from pilot to paid beta only if:** limited-pilot reliability targets hold for an agreed observation period, every high/critical finding has adjudication outcome, customers demonstrate repeated use or willingness to pay, and the product does not rely on unreviewed LLM legal interpretation.
+
+## 15. Milestone artifact checklist
+
+| Milestone | Required durable artifacts |
+|---|---|
+| Phase 0 | charter, source manifests, prototype audit, threat model v1, policy-card template, ADRs |
+| Phase 1 | schema migrations, snapshot spec, evaluator contract, first policy card/rule, golden reports, deterministic test log |
+| Phase 2 | Curb Bench spec/runner, fixtures/mutations, holdout governance, scorecard, release notes |
+| Phase 3 | ingestion spec, reviewer guide, data-flow/LLM assessment, parser/error corpus, approval audit trail |
+| Phase 4 | GitHub App permissions design, CI action/check docs, remediation guide, waiver policy, report schema |
+| Phase 5 | security review, SLO/runbooks, incident/rollback plan, pilot protocol, metrics readout, go/no-go record |
+
+## 16. Immediate next seven actions
+
+1. Run the prototype audit and write the reuse/adapt/archive decision table before changing architecture.
+2. Pin the Vercel Chatbot commit and capture license/NOTICE, `package.json`, lockfile hash and source manifest.
+3. Create one synthetic agreement fixture and have an authorized policy owner approve one narrow `unapproved-provider-reference` policy card.
+4. Define the canonical result schema and result-state semantics before writing a scanner.
+5. Implement a no-network, no-execution repository snapshot runner and prove it with a malicious-fixture test.
+6. Build the first deterministic evaluator and ten Curb Bench development cases, including unsupported and near-miss cases.
+7. Demonstrate the full local loop: confirm obligation → scan → evidence → seeded fix → deterministic rerun/report delta; then decide whether to begin Phase 2.
+
+## 17. Source links
+
+- [Vercel Chatbot repository](https://github.com/vercel/chatbot), [license](https://github.com/vercel/chatbot/blob/main/LICENSE), and [package metadata](https://github.com/vercel/chatbot/blob/main/package.json).
+- [Common Paper AI Addendum overview](https://commonpaper.com/standards/ai-addendum), [version 1.0 terms](https://commonpaper.com/standards/ai-addendum/1.0), and [source repository](https://github.com/CommonPaper/AI-Addendum).
+- [Vercel AI SDK repository](https://github.com/vercel/ai).
+
+These links identify planning inputs only. Before any implementation or publication, re-fetch and record exact revisions and license/attribution evidence in the project source manifest.

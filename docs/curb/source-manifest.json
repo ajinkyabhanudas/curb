@@ -1,0 +1,35 @@
+{
+  "retrievedAt": "2026-10-14T00:00:29.348Z",
+  "repo": "vercel/chatbot",
+  "commitSha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+  "commitPinnedByArgument": true,
+  "spdxLicense": "NOASSERTION",
+  "files": [
+    {
+      "path": "LICENSE",
+      "present": true,
+      "sha256": "5809eb2eab284b24fc53b21484398fd264c6f929d3b32ecdc7108a89f037e943",
+      "bytes": 552
+    },
+    {
+      "path": "NOTICE",
+      "present": false,
+      "sha256": null,
+      "bytes": 0
+    },
+    {
+      "path": "package.json",
+      "present": true,
+      "sha256": "b1ca1259ccaf3ec22abfc534c954a64d2749357db583789d8f9aa10ff8ed548c",
+      "bytes": 3439
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "present": true,
+      "sha256": "89755153970535ec19f68306395b907ec9c43d0fa9d6420f74560d79e8280970",
+      "bytes": 344525
+    }
+  ],
+  "attribution": "Reference fixture derived from vercel/chatbot at c2f8235e1f3ea903ad8b7f61447c4f74164b5c58. GitHub reports no recognised SPDX licence (NOASSERTION); the LICENSE file at this commit has 552 bytes and must be reviewed by the source reviewer before any redistribution. Not an assertion about the upstream project's practices. No endorsement implied.",
+  "status": "DRAFT, unsigned. Needs source and license review sign-off before any redistribution."
+}
