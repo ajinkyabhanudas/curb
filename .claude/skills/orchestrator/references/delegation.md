@@ -14,4 +14,6 @@ Rules:
 - One writer at a time on the same files.
 - Reviewers get the diff as a file and the spec, not the implementer's account.
 - The implementer never dispatches its own reviewer. The orchestrator does.
-- A subagent's "done" is a claim. Re-run the checks before relaying it.
+- A subagent's "done" is a claim. Re-run the checks before relaying it, and verify its factual claims (hosts, package names, line numbers) before editing from them.
+- Point reviewers at a committed range and do not edit the tree while one is reading it; give them real inputs as read-only paths.
+- Explorers and some reviewers have no shell, so they cannot run tests or time anything. Say so in the brief and run those checks yourself.

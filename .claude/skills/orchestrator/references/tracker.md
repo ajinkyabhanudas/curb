@@ -9,7 +9,12 @@ If the tracker connection is down, say so, give the comment text for the user to
 1. Search open work for the project. Request only summary, status and labels, to keep output small.
 2. Pick the matching ticket. Read its outcome, acceptance criteria and dependencies.
 3. Put the key in the branch name and PR title.
-4. Tickets that need a named human decision (owners, counsel, licence, security sign-off) are not closed by merging code.
+4. Move the ticket to In Progress now, and move its parent epic too if it is still To Do. A ticket with work under way that sits in To Do makes the board wrong.
+5. Tickets that need a named human decision (owners, counsel, licence, security sign-off) are not closed by merging code.
+
+## When a PR opens
+
+Comment on the ticket with the PR link, checks run and known gaps. Keep it In Progress until the merge. Re-read the board at the end of any session in which several tickets moved, and fix any that disagree with the work.
 
 ## After merge
 
