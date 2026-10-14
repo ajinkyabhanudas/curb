@@ -40,9 +40,9 @@ describe('policy card', () => {
     expect(own({ a: 'x' }, '__proto__')).toBeUndefined();
   });
 
-  it('ships version 1.2.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
+  it('ships version 1.3.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
     const { card, hash } = await loadCard(CARD_PATH);
-    expect(card.version).toBe('1.2.0');
+    expect(card.version).toBe('1.3.0');
     expect(card.status).toBe('draft, pending counsel approval');
     const edits: ((c: typeof card) => void)[] = [
       (c) => c.approvedTextPatterns.push('extra'),
@@ -58,6 +58,17 @@ describe('policy card', () => {
       edit(copy);
       expect(hashOf(copy)).not.toBe(hash);
     }
+  });
+
+  it('1.3.0 describes provider property values and catalog files, and discloses their limits', async () => {
+    const { card } = await loadCard(CARD_PATH);
+    expect(card.interpretation).toMatch(/provider-named property/);
+    expect(card.prerequisites.join('\n')).toMatch(/catalog/);
+    expect(card.falsePositiveExamples.join('\n')).toMatch(/signInWithOAuth/);
+    const risks = card.falseNegativeRisks.join('\n');
+    expect(risks).toMatch(/shorthand \{ provider \}/);
+    expect(risks).toMatch(/Bare model ids without a provider prefix/);
+    expect(risks).toMatch(/single real repository/);
   });
 
   it('1.2.0 discloses how OpenRouter is treated and which hosts are not registered', async () => {

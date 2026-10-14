@@ -30,6 +30,7 @@ export const UNKNOWN_REASONS = [
   'parse-error',
   'minified',
   'generated',
+  'catalog',
   'unsupported-language',
   'too-large',
   'symlink',

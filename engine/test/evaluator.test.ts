@@ -482,8 +482,8 @@ describe('evaluate: binary entries never hide an unlisted language (re-review re
 });
 
 describe('evaluate: model-identifier literals anywhere in source (real-repo gap, card 1.1.0)', () => {
-  it('reports evaluator 0.4.0: JSX attribute strings no longer count towards the minified share (CURB-21)', () => {
-    expect(EVALUATOR_VERSION).toBe('0.4.0');
+  it('reports evaluator 0.5.0: provider property values and catalog files (CURB-19)', () => {
+    expect(EVALUATOR_VERSION).toBe('0.5.0');
   });
 
   const one = async (src: string, allowlist = ['anthropic'], name = 'a.ts') => run({ [name]: src }, allowlist);
@@ -715,6 +715,97 @@ describe('evaluate: small SVG icon components are not minified (CURB-21)', () =>
   it('does not exempt a long JSX attribute in a .js file or by name', async () => {
     const out = await run({ 'icon.js': icon(), 'vendor.min.js': 'var a=1;' });
     expect(out.unknownFiles.map((u) => u.path).sort()).toEqual(['icon.js', 'vendor.min.js']);
+  });
+});
+
+describe('evaluate: provider property values (CURB-19, rule A)', () => {
+  const ids = (out: Awaited<ReturnType<typeof run>>) => out.findings.map((f) => f.providerId);
+
+  it('flags provider-named property values that are registry ids, through as/satisfies/parentheses', async () => {
+    const out = await run({
+      'a.ts': [
+        'export const a = { provider: "groq", modelId: "x" };',
+        'export const b = { provider: "mistral" as ModelProvider };',
+        'export const c = { providerId: ("deepseek") };',
+        'export const d = { embeddings_provider: "openai" satisfies string };',
+        'export const e = { "provider_id": "cohere" };',
+        '',
+      ].join('\n'),
+    });
+    expect(ids(out)).toEqual(['groq', 'mistral', 'deepseek', 'openai', 'cohere']);
+    expect(out.findings[0].evidence.reason).toMatch(/provider property/);
+  });
+
+  it('passes once the provider is allowlisted', async () => {
+    const out = await run({ 'a.ts': 'export const a = { provider: "groq" };\n' }, ['anthropic', 'groq']);
+    expect(out.state).toBe('pass');
+  });
+
+  it('does not flag type positions, other keys, shorthand, variables, unregistered values or non-provider keys', async () => {
+    const out = await run({
+      'a.ts': [
+        'export type T = { provider: "groq" };',
+        'export interface I { provider: "groq" }',
+        'export const a = { provider: "custom" };',
+        'export const b = { vendor: "groq" };',
+        'const provider = "groq"; export const c = { provider };',
+        'export const d = { providerName: "groq" };',
+        'export const e = { provider: someCall("groq") };',
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('flags an OAuth login object too; the card discloses this as a known false positive', async () => {
+    const out = await run({ 'login.ts': 'signInWithOAuth({ provider: "google" });\n' });
+    expect(ids(out)).toEqual(['google']);
+  });
+});
+
+describe('evaluate: catalog-shaped files are unknown (CURB-19, rule B)', () => {
+  const entry = (i: number, id: string) => `  { modelId: "${id}", modelName: "Model ${i}", platformLink: "https://example.test/${i}" },`;
+  const catalog = (ids: string[], extra: string[] = []) =>
+    [...extra, 'export const LIST = [', ...ids.map((id, i) => entry(i, id)), '];', ''].join('\n');
+  const eight = ['llama3-8b-8192', 'llama3-70b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it', 'gpt-4-turbo', 'claude-3-opus-20240229', 'gemini-pro', 'qwen-72b-chat'];
+
+  it('marks a file made of bare model ids unknown, keeps it evaluated, and still reports no findings', async () => {
+    const out = await run({ 'groq-list.ts': catalog(eight) }, ['anthropic', 'groq']);
+    expect(out.unknownFiles).toEqual([{ path: 'groq-list.ts', reason: 'catalog' }]);
+    expect(out.findings).toEqual([]);
+    expect(out.filesEvaluated).toBe(1);
+    expect(out.state).toBe('unknown');
+  });
+
+  it('lists the catalog reason in addition to a failing result', async () => {
+    const out = await run({ 'list.ts': catalog(eight, ['import OpenAI from "openai";']) });
+    expect(out.state).toBe('fail');
+    expect(out.findings.map((f) => f.providerId)).toEqual(['openai']);
+    expect(out.unknownFiles).toEqual([{ path: 'list.ts', reason: 'catalog' }]);
+  });
+
+  it('does not mark ordinary files: a short allowlist, a low share, types only, keys only, import specifiers', async () => {
+    const lowShare = [
+      'export const MODELS = ["gpt-4", "gpt-3.5-turbo", "claude-3-opus", "gemini-pro", "llama3-8b", "gemma-7b"];',
+      ...Array.from({ length: 40 }, (_, i) => `export const label${i} = "label number ${i}";`),
+      '',
+    ].join('\n');
+    const out = await run({
+      'short.ts': catalog(eight.slice(0, 4)),
+      'low-share.ts': lowShare,
+      'types.ts': `export type M = ${eight.map((m) => `"${m}"`).join(' | ')};\n`,
+      'keys.ts': `export const LIMITS = {\n${eight.map((m) => `  "${m}": 1,`).join('\n')}\n};\n`,
+      'imports.ts': Array.from({ length: 8 }, (_, i) => `import t${i} from "gpt-tokenizer";`).join('\n') + '\n',
+    });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('does not treat CSS class names starting with command- as model ids', async () => {
+    const cls = Array.from({ length: 10 }, (_, i) => `export const c${i} = "command-item-${i}";`).join('\n');
+    const out = await run({ 'ui.ts': `${cls}\n` });
+    expect(out.unknownFiles).toEqual([]);
   });
 });
 

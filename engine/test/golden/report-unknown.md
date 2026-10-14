@@ -16,7 +16,7 @@ This report checks configured engineering evidence against one human-confirmed c
 
 **UNKNOWN**: The rule could not establish a result for the whole scope. See the unknown files and notes below; this is not a pass.
 
-Rule: `unapproved-provider-reference` v`1.2.0`. Files evaluated: 1.
+Rule: `unapproved-provider-reference` v`1.3.0`. Files evaluated: 1.
 
 ## Confirmed obligation
 
@@ -45,12 +45,12 @@ None.
 
 ## Inputs and hashes
 
-- Result hash: `6fe088055a93ee353d95d4d1a9d9636f2021603946c1636b3fc00aa4f489433b`
+- Result hash: `b1bb1ff909d5973f3ccdc07b615116a24bc0a2e15d284f72b785bfee100b960d`
 - Tree hash: `2892a1cdc75fa706b206b4c9866e4d23e192236644e7acce002789d70311ab09`
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
-- Obligation id: `3c3dc0e5f185574bc8bfd1d179b6a43899bc395480c8b2027d5ada7e9bfc92ae`
-- Policy card hash: `0553ce5f2ab37a77d72d511852326e3f955c22c4107843e9288ac6ee27ee18fd`
-- Evaluator version: `0.4.0+typescript-5.9.3`
+- Obligation id: `7b84d489c9eee8c3eafc3644af03bdd43c0525e2dcc637d6b3686eb666b2bcdf`
+- Policy card hash: `da136904a4f9a3198e02a99bdf104530bcad6e93a51a9476aba5426d468eef76`
+- Evaluator version: `0.5.0+typescript-5.9.3`
 
 ## Run
 
