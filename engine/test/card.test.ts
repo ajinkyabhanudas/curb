@@ -60,6 +60,15 @@ describe('policy card', () => {
     }
   });
 
+  it('1.2.0 discloses how OpenRouter is treated and which hosts are not registered', async () => {
+    const { card } = await loadCard(CARD_PATH);
+    const risks = card.falseNegativeRisks.join('\n');
+    expect(risks).toMatch(/OpenRouter .*own provider id/);
+    expect(risks).toMatch(/api\.together\.xyz/);
+    expect(risks).toMatch(/per-region subdomains/);
+    expect(card.registry.hosts['openrouter.ai']).toBe('openrouter');
+  });
+
   it('1.1.0 describes model-identifier literals and discloses what they still miss', async () => {
     const { card } = await loadCard(CARD_PATH);
     expect(card.interpretation).toMatch(/model[- ]identifier literal/i);

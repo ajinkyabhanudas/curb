@@ -686,7 +686,7 @@ describe('evaluate: registry entries added in card 1.1.0', () => {
 
 describe('evaluate: registry entries added in card 1.2.0 (CURB-20)', () => {
   it('maps each new package and host to its provider id', async () => {
-    const pkgs = { '@openrouter/ai-sdk-provider': 'openrouter', '@openrouter/sdk': 'openrouter' };
+    const pkgs = { '@openrouter/ai-sdk-provider': 'openrouter', '@openrouter/sdk': 'openrouter', '@openrouter/agent': 'openrouter' };
     const hosts = {
       'openrouter.ai': 'openrouter', 'api.together.ai': 'togetherai', 'api.fireworks.ai': 'fireworks',
       'api.deepinfra.com': 'deepinfra', 'api.moonshot.ai': 'moonshotai',
