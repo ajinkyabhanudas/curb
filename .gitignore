@@ -74,7 +74,8 @@ pnpm-debug.log*
 *.pem
 
 # ---- Editors and OS ----
-.claude/
+.claude/*
+!.claude/skills/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
