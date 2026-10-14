@@ -225,7 +225,10 @@ describe('curb diff CLI', () => {
     const bad = path.join(dir, 'bad.json');
     await writeFile(bad, JSON.stringify({ body: { state: 'great' }, envelope: {} }));
     await expect(cli(['diff', '--card', CARD_PATH, '--before', bad, '--after', after])).rejects.toMatchObject({
-      code: 2, stderr: expect.stringMatching(/not a valid result/),
+      code: 2, stderr: expect.stringContaining('curb: --before file is not a valid result:'),
+    });
+    await expect(cli(['diff', '--card', CARD_PATH, '--before', before, '--after', bad])).rejects.toMatchObject({
+      code: 2, stderr: expect.stringContaining('curb: --after file is not a valid result:'),
     });
   });
 

@@ -39,6 +39,8 @@ A card ships with status `draft, pending counsel approval` until a named counsel
 
 The shipped card `unapproved-provider-reference` was edited after its first commit without a version bump: it was added in `d8e6e8a` and changed in `cb0e418` and `05dac51` while still `1.0.0`. The final branch review bumped it to `1.0.1`, adding the file-type prerequisites and new false-negative disclosures at the same time. That bump resolves the earlier unversioned edits: `1.0.1` names one text, and any result or obligation made under an earlier `1.0.0` text carries a different version as well as a different card hash. Status stays `draft, pending counsel approval`; no approved text has been altered because no approval has been given.
 
+After the bump, a scoped re-review changed the binary-file rule, and the `1.0.1` text was edited in place (the never-scanned list in `prerequisites` gained compiled and media types, and the binary lines in `prerequisites` and `falseNegativeRisks` were corrected) without a second bump. This is deliberate: `1.0.1` has not left the development branch, so no result or obligation outside it was made against the earlier `1.0.1` text. From the first release of `1.0.1` onward, any text change needs a new version.
+
 Obligations bind the card id and version, not its hash, so a future edit without a bump would again be accepted by `scan` and visible only as a changed `policyCardHash` in results. The review rule above (every text change bumps the version) is the control.
 
 ## Known discrepancies

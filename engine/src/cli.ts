@@ -182,8 +182,8 @@ async function scan(args: string[]): Promise<number> {
   return exitCodeFor(body.state);
 }
 
-async function readVerifiedResult(file: string): Promise<ResultFile> {
-  const result = parseResultFile(JSON.parse(await readFile(file, 'utf8')));
+async function readVerifiedResult(file: string, option = '--result'): Promise<ResultFile> {
+  const result = parseResultFile(JSON.parse(await readFile(file, 'utf8')), option);
   verifyResultIntegrity(result);
   return result;
 }
@@ -239,8 +239,8 @@ async function diff(args: string[]): Promise<void> {
   });
   const cardFile = need(values, 'card');
   await checkOut(values.out, values.force);
-  const before = await readVerifiedResult(need(values, 'before'));
-  const after = await readVerifiedResult(need(values, 'after'));
+  const before = await readVerifiedResult(need(values, 'before'), '--before');
+  const after = await readVerifiedResult(need(values, 'after'), '--after');
   const { card, hash } = await loadCard(cardFile);
   if (before.body.policyCardHash !== hash || after.body.policyCardHash !== hash) {
     throw new Error(

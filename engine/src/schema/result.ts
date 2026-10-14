@@ -67,7 +67,17 @@ export function assertStateInvariants(body: ResultBody): void {
   }
 }
 
-export function parseResultFile(raw: unknown): ResultFile {
+/** `option` names the command-line option the file came from, so the error points at the right argument. */
+export function parseResultFile(raw: unknown, option = '--result'): ResultFile {
+  try {
+    return parseShape(raw);
+  } catch (e) {
+    if (e instanceof ResultShapeError && option !== '--result') throw new Error(e.message.replace(/^--result /, `${option} `));
+    throw e;
+  }
+}
+
+function parseShape(raw: unknown): ResultFile {
   const top = obj(raw, 'result', ['body', 'envelope']);
   const b = obj(top.body, 'body', [
     'schemaVersion', 'ruleId', 'ruleVersion', 'evaluatorVersion', 'policyCardHash', 'treeHash', 'agreementHash',

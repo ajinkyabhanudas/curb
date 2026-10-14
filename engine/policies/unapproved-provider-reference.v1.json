@@ -17,8 +17,8 @@
     "Source is TypeScript or JavaScript",
     "Files are readable, under the size cap and not minified or generated",
     "Only files with a TypeScript or JavaScript extension (.ts .tsx .js .jsx .mjs .cjs .mts .cts) are analyzed",
-    "These non-code file types are never scanned: .md .markdown .txt .rst .json .jsonc .yaml .yml .toml .ini .cfg .conf .env .lock .log .csv .tsv .xml .svg .png .jpg .jpeg .gif .webp .avif .ico .bmp .tiff .woff .woff2 .ttf .otf .eot .pdf .zip .gz .tar .tgz .map .css .scss .sass .less .sql .graphql .gql .prisma, and the suffix-like extensions .local .example .sample .template .dist",
-    "Every other file type yields unknown (unsupported-language), as does an extensionless file starting with #!; other extensionless files are not scanned",
+    "These non-code file types are never scanned: .md .markdown .txt .rst .json .jsonc .yaml .yml .toml .ini .cfg .conf .env .lock .log .csv .tsv .xml .svg .png .jpg .jpeg .gif .webp .avif .ico .bmp .tiff .woff .woff2 .ttf .otf .eot .pdf .zip .gz .tar .tgz .map .css .scss .sass .less .sql .graphql .gql .prisma, the suffix-like extensions .local .example .sample .template .dist, and the compiled and media types .wasm .node .so .dll .dylib .exe .bin .jar .class .o .a .pyc .db .sqlite .sqlite3 .mp3 .mp4 .mov .webm .ogg .wav .flac .avi .psd .icns .heic (the list is IGNORABLE_EXT in engine/src/evaluator/evaluate.ts)",
+    "Every other file type yields unknown: unsupported-language for text, unreadable for binary content (a NUL byte near the start, including UTF-16 text); an extensionless file starting with #! yields unknown; other extensionless files, text or binary, are not scanned",
     "A symlink yields unknown whatever its name; a file that is too large or unreadable yields unknown unless its type is never scanned"
   ],
   "falsePositiveExamples": [
@@ -39,7 +39,7 @@
     "Files whose extension is not TypeScript or JavaScript: the embedding formats reported unknown are covered, but .md, .json, .yaml and .env files are not scanned",
     "Exclusion directories are matched by name at any depth, so a directory named like an exclusion is skipped wherever it sits",
     "Code inside a never-scanned file type (for example a provider URL in .sql, .graphql or a config file) is not flagged",
-    "Binary content is not analyzed; a file with a NUL byte near its start is ignored unless it has a TypeScript or JavaScript extension",
+    "Binary content is never analyzed: an extensionless binary file is skipped, a text file with an unlisted extension yields unknown, and never-scanned types are not analyzed whatever their content",
     "createRequire(...)('openai') and other loaders reached through a created require function",
     "declare module 'openai' blocks in declaration files",
     "Tagged-template constructor calls such as gateway`openai/gpt-5`",

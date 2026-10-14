@@ -20,7 +20,7 @@ Confirm obligation, scan, evidence, fix, rerun.
 
 ## Supported repository type
 
-TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeScript and JavaScript files are analyzed; a fixed list of non-code file types (docs, data, config, images, fonts, archives, styles, SQL, GraphQL) is not scanned; every other file type, including other languages and embedding formats, yields `unknown`, never `pass`.
+TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeScript and JavaScript files are analyzed; a fixed list of non-code file types (docs, data, config, images, fonts, archives, styles, SQL, GraphQL, compiled and media artifacts; `IGNORABLE_EXT` in `engine/src/evaluator/evaluate.ts`) is not scanned; every other file type, including other languages, embedding formats and binary or UTF-16 content under those extensions, yields `unknown`, never `pass`.
 
 ## Non-claims
 

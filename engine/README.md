@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 304 tests
+npm test            # vitest, 313 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:aeb4ec4bc16fd9445749840caf06000bd44e22847229b6e1b1d0e6ff31351b7b
+result sha256:5f8eaba23320a1a9fc72879713b931e8b4d7bc394e89584272b0a15ce4af85b9
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:a9871fb72578b71da9b63cb61f6a87af3841d129afee044039c667422ab02bad
+result sha256:b9f84b3f5e380a9fdf9810b4e8303baebaf3af6cc3220d221e15696a3ade26fc
 ```
 
 4. Diff the two runs:
@@ -192,9 +192,9 @@ Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs
 Which files are looked at:
 
 - Only the TypeScript and JavaScript extensions above are analyzed.
-- These types are never scanned (an allowlist of non-code files): `.md` `.markdown` `.txt` `.rst` `.json` `.jsonc` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.env` `.lock` `.log` `.csv` `.tsv` `.xml` `.svg` `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.ico` `.bmp` `.tiff` `.woff` `.woff2` `.ttf` `.otf` `.eot` `.pdf` `.zip` `.gz` `.tar` `.tgz` `.map` `.css` `.scss` `.sass` `.less` `.sql` `.graphql` `.gql` `.prisma`, plus the suffix-like `.local` `.example` `.sample` `.template` `.dist` (so `.env.local` is skipped). Their size and readability do not matter.
-- Every other extension (`.py`, `.ps1`, `.coffee`, `.vue`, `.svelte`, ...) makes the file `unknown` (`unsupported-language`), so an unlisted language can never read as a pass. An extensionless file is `unknown` only if it starts with `#!` (after an optional BOM); `Makefile`, `LICENSE` and dotfiles such as `.env` are skipped.
-- Binary content (a NUL byte in the first 8 KiB) is not analyzed: `unknown` under a TypeScript or JavaScript extension, skipped otherwise.
+- These types are never scanned (an allowlist of non-code files): `.md` `.markdown` `.txt` `.rst` `.json` `.jsonc` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.env` `.lock` `.log` `.csv` `.tsv` `.xml` `.svg` `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.ico` `.bmp` `.tiff` `.woff` `.woff2` `.ttf` `.otf` `.eot` `.pdf` `.zip` `.gz` `.tar` `.tgz` `.map` `.css` `.scss` `.sass` `.less` `.sql` `.graphql` `.gql` `.prisma`, the suffix-like `.local` `.example` `.sample` `.template` `.dist` (so `.env.local` is skipped), and the compiled and media types `.wasm` `.node` `.so` `.dll` `.dylib` `.exe` `.bin` `.jar` `.class` `.o` `.a` `.pyc` `.db` `.sqlite` `.sqlite3` `.mp3` `.mp4` `.mov` `.webm` `.ogg` `.wav` `.flac` `.avi` `.psd` `.icns` `.heic`. Their size, readability and content do not matter. The list lives in one place, `IGNORABLE_EXT` in `src/evaluator/evaluate.ts`.
+- Every other extension (`.py`, `.ps1`, `.coffee`, `.vue`, `.svelte`, ...) makes the file `unknown` (`unsupported-language`, or `unreadable` if its content is binary), so an unlisted language can never read as a pass. An extensionless file is `unknown` only if it starts with `#!` (after an optional BOM); `Makefile`, `LICENSE` and dotfiles such as `.env` are skipped.
+- Binary content (a NUL byte in the first 8 KiB, which includes UTF-16 text) is never analyzed. It is skipped for never-scanned types and for files with no extension; under any other extension (`.ts`, `.sh`, `.py`, `.ps1`, ...) the file is `unknown` (`unreadable`), because it may be a script. An extensionless file over the size cap is `unknown` (`too-large`) since it is never read; this is deliberately conservative.
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
 
 A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.

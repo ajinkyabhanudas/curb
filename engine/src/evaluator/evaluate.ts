@@ -9,8 +9,9 @@ import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 // Bump on any change to what is flagged or reported unknown: diff refuses to compare results across versions.
 export const EVALUATOR_VERSION = '0.2.0';
 
-// Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned.
-// Every other extension is `unsupported-language`, so a language nobody listed can never read as a pass.
+// Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned; it is the
+// single source of truth for that list (the card and docs repeat it). Every other extension is unknown
+// (`unsupported-language`, or `unreadable` when its content is binary), so an unlisted language can never read as a pass.
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts']);
 export const IGNORABLE_EXT = new Set(
   [
@@ -20,6 +21,9 @@ export const IGNORABLE_EXT = new Set(
     'gql', 'prisma',
     // suffix-like extensions, as in .env.local or config.example
     'local', 'example', 'sample', 'template', 'dist',
+    // compiled and media artifacts that are binary in practice
+    'wasm', 'node', 'so', 'dll', 'dylib', 'exe', 'bin', 'jar', 'class', 'o', 'a', 'pyc', 'db', 'sqlite', 'sqlite3',
+    'mp3', 'mp4', 'mov', 'webm', 'ogg', 'wav', 'flac', 'avi', 'psd', 'icns', 'heic',
   ].map((e) => `.${e}`),
 );
 const MAX_LINE_LENGTH = 1000;
@@ -100,12 +104,15 @@ function isExcluded(filePath: string, card: PolicyCard): boolean {
 /**
  * Decide what happens to a snapshot entry before analysis: 'ignore', an unknown reason, or undefined (analyze it).
  * A symlink can hide source whatever its name, so it is always unknown. Ignorable types are never analyzed, so their
- * size or readability does not matter. Binary content is only a problem under a source extension.
+ * size or readability does not matter. Binary content (a NUL byte near the start, which includes UTF-16 text) is
+ * skipped only when the file has no extension; under any other extension it may be a script and is unknown.
+ * Known conservative case: an over-cap extensionless file is never read, so it is unknown (too-large) even though the
+ * same file under the cap would be skipped as binary.
  */
 function classify(file: SnapshotFile, ext: string): UnknownReason | 'ignore' | undefined {
   if (file.status === 'symlink') return 'symlink';
   if (IGNORABLE_EXT.has(ext)) return 'ignore';
-  if (file.status === 'binary') return SOURCE_EXT.has(ext) ? 'unreadable' : 'ignore';
+  if (file.status === 'binary') return ext === '' ? 'ignore' : 'unreadable';
   if (file.status === 'too-large') return 'too-large';
   if (file.status !== 'ok') return 'unreadable';
   if (ext === '') return file.content?.replace(/^\uFEFF/, '').startsWith('#!') ? 'unsupported-language' : 'ignore';

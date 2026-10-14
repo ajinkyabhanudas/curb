@@ -1,5 +1,5 @@
 // engine/test/evaluator.test.ts
-import { chmod, symlink } from 'node:fs/promises';
+import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { IGNORABLE_EXT, evaluate, scanFile } from '../src/evaluator/evaluate.ts';
@@ -285,7 +285,8 @@ describe('evaluate: file types outside the source and ignorable sets (final revi
   const IGNORABLE = (
     'md markdown txt rst json jsonc yaml yml toml ini cfg conf env lock log csv tsv xml svg png jpg jpeg gif webp avif ' +
     'ico bmp tiff woff woff2 ttf otf eot pdf zip gz tar tgz map css scss sass less sql graphql gql prisma ' +
-    'local example sample template dist'
+    'local example sample template dist ' +
+    'wasm node so dll dylib exe bin jar class o a pyc db sqlite sqlite3 mp3 mp4 mov webm ogg wav flac avi psd icns heic'
   ).split(' ');
   it('keeps the ignorable set exactly as ruled', () => {
     expect([...IGNORABLE_EXT].sort()).toEqual(IGNORABLE.map((e) => `.${e}`).sort());
@@ -426,5 +427,56 @@ describe('evaluate: require.resolve, import types and gateway case (final review
   it('compares gateway prefixes case-insensitively', async () => {
     expect((await run({ 'a.ts': "gateway('OpenAI/gpt-5');\n" })).state).toBe('fail');
     expect((await run({ 'a.ts': "gateway('ANTHROPIC/claude');\n" })).state).toBe('pass');
+  });
+});
+
+describe('evaluate: binary entries never hide an unlisted language (re-review regression)', () => {
+  for (const name of ['tools/call.sh', 'tools/call.py', 'tools/call.rb']) {
+    it(`reports ${name} with a NUL byte in a comment as unreadable`, async () => {
+      const out = await run({ [name]: 'echo hi\n# \u0000\ncurl https://api.openai.com/v1/chat\n', 'ok.ts': '1' });
+      expect(out.unknownFiles).toEqual([{ path: name, reason: 'unreadable' }]);
+      expect(out.state).toBe('unknown');
+    });
+  }
+
+  for (const name of ['tools/call.ps1', 'tools/call.py']) {
+    it(`reports UTF-16LE ${name} as unknown, never pass`, async () => {
+      const dir = await makeRepo({ 'ok.ts': '1' });
+      await mkdir(path.join(dir, 'tools'));
+      await writeFile(path.join(dir, name), Buffer.from('Invoke-RestMethod https://api.openai.com/v1/chat\n', 'utf16le'));
+      const out = await runDir(dir);
+      expect(out.unknownFiles).toEqual([{ path: name, reason: 'unreadable' }]);
+      expect(out.state).toBe('unknown');
+    });
+  }
+
+  it('ignores binary .png, .wasm, .node and .mp4 files', async () => {
+    const out = await run({ 'a.png': 'a\u0000b', 'b.wasm': 'a\u0000b', 'c.node': 'a\u0000b', 'd.mp4': 'a\u0000b', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('ignores every ignorable type when its content is binary', async () => {
+    const files: Record<string, string> = { 'ok.ts': '1' };
+    for (const ext of IGNORABLE_EXT) files[`f${ext}`] = 'a\u0000b';
+    const out = await run(files);
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('ignores a small extensionless binary but reports a large one as too-large', async () => {
+    const small = await run({ blob: 'a\u0000b', 'ok.ts': '1' });
+    expect(small.unknownFiles).toEqual([]);
+    expect(small.state).toBe('pass');
+    // Known conservative inconsistency: an over-cap extensionless file is never read, so it cannot be told apart from
+    // a script and stays unknown, while the same file under the cap is seen as binary and skipped.
+    const dir = await makeRepo({ blob: `a\u0000${'b'.repeat(50)}`, 'ok.ts': '1' });
+    const big = await runDir(dir, 10);
+    expect(big.unknownFiles).toEqual([{ path: 'blob', reason: 'too-large' }]);
+  });
+
+  it('keeps a binary .ts file unknown (unreadable)', async () => {
+    const out = await run({ 'a.ts': 'a\u0000b', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
   });
 });
