@@ -18,4 +18,4 @@ Do not build: an LLM in the verdict path, claims of legal compliance, claims abo
 - Downloaded or cloned code is untrusted: its own empty directory, nothing installed or run from it.
 - Process steps are advisory until a script, test or exit code backs them. A step with no check goes in `docs/process-gaps.md`.
 - Jira project `CURB` tracks the work. Never invent a ticket key. Merging code does not close an `owner-action` ticket.
-- Changes under the profile's high-risk paths get an independent review before merge.
+- Changes under the profile's high-risk paths: map dependents with `feature-dev:code-explorer` before editing, and get an independent review before merge.
