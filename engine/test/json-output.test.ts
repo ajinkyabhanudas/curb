@@ -36,7 +36,7 @@ describe('CLI JSON is terminal safe', () => {
 
     const { stdout } = await cli([...c.reportArgs(res), '--format', 'json']);
     expect(stdout).not.toMatch(DANGEROUS);
-    expect(JSON.parse(stdout)).toEqual(parsed);
+    expect(JSON.parse(stdout).result).toEqual(parsed);
 
     const confirmed = await cli([
       'confirm', '--agreement', AGREEMENT_PATH, '--card', CARD_PATH, '--quote', QUOTE, '--allow', 'anthropic',

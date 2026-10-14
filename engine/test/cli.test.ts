@@ -26,6 +26,8 @@ describe('curb CLI (M1)', () => {
       '--agreement', AGREEMENT_PATH, '--obligation', obligationFile, '--store', dir, '--out', resultFile,
     ]);
     expect(stdout).toMatch(/^FAIL/m);
+    // the draft card status is the second line, before any finding (final review B1)
+    expect(stdout.split('\n')[1]).toBe('policy card status: draft, pending counsel approval');
     expect(stdout).toMatch(/lib\/ai\/providers\.ts:2:\d+\s+openai/);
     expect(stdout).toMatch(/result sha256:[0-9a-f]{64}/);
     const saved = JSON.parse(await readFile(resultFile, 'utf8'));

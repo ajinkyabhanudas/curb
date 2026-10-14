@@ -10,6 +10,7 @@ import type { ResultFile } from '../src/schema/types.ts';
 import { canonicalize } from '../src/schema/canonical.ts';
 import { sha256 } from '../src/schema/hash.ts';
 import { parseResultFile } from '../src/schema/result.ts';
+import { loadCard } from '../src/policy/card.ts';
 import { confirmAndRecord, scanAndRecord } from '../src/workflow.ts';
 import { AGREEMENT_PATH, CARD_PATH, QUOTE, ROOT, confirmFixture, fixtureDeps, makeRepo, scanFixture } from './helpers.ts';
 
@@ -274,6 +275,21 @@ describe('curb report CLI', () => {
       a[a.indexOf('--result') + 1] = bad;
       await expect(cli(a)).rejects.toMatchObject({ code: 2, stderr: expect.stringMatching(/result/) });
     }
+  });
+});
+
+describe('curb report --format json (final review B1)', () => {
+  it('wraps the verified result with the policy card id, version, status, hash and non-claims', async () => {
+    const { res, args } = await cliFixture();
+    const { stdout } = await cli([...args, '--format', 'json']);
+    const out = JSON.parse(stdout) as Record<string, unknown>;
+    const { card, hash } = await loadCard(CARD_PATH);
+    expect(Object.keys(out)).toEqual(['policyCard', 'nonClaims', 'result']);
+    expect(out.policyCard).toEqual({ id: card.id, version: card.version, status: 'draft, pending counsel approval', hash });
+    expect(out.nonClaims).toEqual(card.nonClaims);
+    expect(out.result).toEqual(JSON.parse(await readFile(res, 'utf8')));
+    // a report is not a result file
+    expect(() => parseResultFile(out)).toThrow();
   });
 });
 

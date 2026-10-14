@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { sha256 } from '../schema/hash.ts';
 import { HEX64, hashOf, isPlainObject } from '../schema/hashing.ts';
@@ -106,6 +106,16 @@ export class FsAuditLog implements AuditLog {
 
   private file(ctx: TenantContext): string {
     return path.join(tenantDir(this.root, ctx), 'audit.jsonl');
+  }
+
+  /** Whether the tenant's log file exists at all (an empty file counts). */
+  async exists(ctx: TenantContext): Promise<boolean> {
+    try {
+      await access(this.file(ctx));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async list(ctx: TenantContext): Promise<AuditEntry[]> {

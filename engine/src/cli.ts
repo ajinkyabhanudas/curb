@@ -166,17 +166,19 @@ async function scan(args: string[]): Promise<number> {
   const { body, envelope } = file;
   const lines = [
     `${body.state.toUpperCase()}  ${body.findings.length} finding(s), ${body.unknownFiles.length} unknown file(s), ${body.filesEvaluated} file(s) evaluated`,
+    `policy card status: ${safeText(card.status)}`,
     ...body.findings.map((f) =>
       safeText(`  ${f.evidence.path}:${f.evidence.line}:${f.evidence.column}  ${f.providerId}  ${f.evidence.excerpt}`),
     ),
     ...body.unknownFiles.map((u) => safeText(`  unknown: ${u.path} (${u.reason})`)),
-    `policy card status: ${safeText(card.status)}`,
     `store: ${safeText(path.resolve(store))}  tenant: ${safeText(deps.ctx.tenantId)}`,
     `result sha256:${envelope.resultHash}`,
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
   for (const d of diagnostics) process.stderr.write(`curb: diagnostic: ${safeText(d)}\n`);
   if (typeof values.out === 'string') await writeOut(values.out, `${stringifyForOutput(file, 2)}\n`, values.force);
+  // No end-to-end CLI test reaches exit 3: since per-file failures became unknown entries, no real input makes the
+  // evaluator throw. exitCodeFor is unit-tested, and runScan's evaluator seam covers the error state itself.
   return exitCodeFor(body.state);
 }
 
@@ -218,18 +220,33 @@ async function report(args: string[]): Promise<void> {
   if (!applies && file.body.state !== 'not-applicable') {
     throw new Error(`result state is ${file.body.state} but the obligation is recorded as ${safeText(obligation.applicability)}; refusing to report`);
   }
-  const text = values.format === 'json' ? `${stringifyForOutput(file, 2)}\n` : renderMarkdown({ file, card, obligation });
+  // The JSON report wraps the result with the card status and non-claims; it is a report, not a result file.
+  const json = {
+    policyCard: { id: card.id, version: card.version, status: card.status, hash },
+    nonClaims: [...card.nonClaims],
+    result: file,
+  };
+  const text = values.format === 'json' ? `${stringifyForOutput(json, 2)}\n` : renderMarkdown({ file, card, obligation });
   await output(text, values.out, values.force);
 }
 
 async function diff(args: string[]): Promise<void> {
   const { values } = parseArgs({
     args,
-    options: { before: { type: 'string' }, after: { type: 'string' }, out: { type: 'string' }, force: { type: 'boolean' } },
+    options: {
+      before: { type: 'string' }, after: { type: 'string' }, card: { type: 'string' }, out: { type: 'string' }, force: { type: 'boolean' },
+    },
   });
+  const cardFile = need(values, 'card');
   await checkOut(values.out, values.force);
   const before = await readVerifiedResult(need(values, 'before'));
   const after = await readVerifiedResult(need(values, 'after'));
+  const { card, hash } = await loadCard(cardFile);
+  if (before.body.policyCardHash !== hash || after.body.policyCardHash !== hash) {
+    throw new Error(
+      `--card does not match the policy card hash recorded in the results (card ${hash}, before ${safeText(before.body.policyCardHash)}, after ${safeText(after.body.policyCardHash)}); refusing to compare`,
+    );
+  }
   if (before.envelope.resultHash === after.envelope.resultHash) throw new Error('both files are the same result; nothing to compare');
   const notes: string[] = [];
   if (Date.parse(before.envelope.startedAt) > Date.parse(after.envelope.startedAt)) {
@@ -237,7 +254,7 @@ async function diff(args: string[]): Promise<void> {
       `Note: the 'before' run started after the 'after' run; check the argument order (before started ${cell(before.envelope.startedAt)}, after started ${cell(after.envelope.startedAt)}).`,
     );
   }
-  await output(`${renderDeltaMarkdown(diffResults(before.body, after.body), notes)}\n`, values.out, values.force);
+  await output(`${renderDeltaMarkdown(diffResults(before.body, after.body), card.status, notes)}\n`, values.out, values.force);
 }
 
 async function audit(args: string[]): Promise<number> {
@@ -245,7 +262,11 @@ async function audit(args: string[]): Promise<number> {
   const store = need(values, 'store');
   const ctx = { tenantId: String(values.tenant ?? 'demo'), actor: 'cli' };
   const log = new FsAuditLog(store);
-  let count = 0;
+  // A typo in --store or --tenant must not read as a verified, empty log.
+  if (!(await log.exists(ctx))) {
+    throw new Error(`no audit log found for tenant "${ctx.tenantId}" in store "${path.resolve(store)}"`);
+  }
+  let count: number | undefined;
   let ok: boolean;
   try {
     count = (await log.list(ctx)).length;
@@ -254,7 +275,7 @@ async function audit(args: string[]): Promise<number> {
     if (!(e instanceof AuditCorruptError)) throw e;
     ok = false;
   }
-  process.stdout.write(`tenant: ${safeText(ctx.tenantId)}  entries: ${count}\naudit chain ${ok ? 'OK' : 'CORRUPT'}\n`);
+  process.stdout.write(`tenant: ${safeText(ctx.tenantId)}  entries: ${count ?? 'unknown'}\naudit chain ${ok ? 'OK' : 'CORRUPT'}\n`);
   return ok ? 0 : 2;
 }
 

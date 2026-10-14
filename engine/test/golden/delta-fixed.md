@@ -1,5 +1,7 @@
 # Curb rerun delta
 
+> Policy card status: **draft, pending counsel approval**
+
 This compares two scoped Curb results from the same control set. It is not a compliance statement, legal advice or a certification.
 
 State: **FAIL** to **PASS**

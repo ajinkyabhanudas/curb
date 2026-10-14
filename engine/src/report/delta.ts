@@ -1,5 +1,6 @@
 // engine/src/report/delta.ts
 import type { Finding, ResultBody, ResultState, UnknownFile } from '../schema/types.ts';
+import { safeText } from '../terminal.ts';
 import { cell } from './markdown.ts';
 
 export interface Delta {
@@ -91,9 +92,12 @@ function stateMeaning(d: Delta): string[] {
   return out;
 }
 
-export function renderDeltaMarkdown(d: Delta, notes: string[] = []): string {
+/** `cardStatus` comes from the user's own policy card, already matched against both results' policyCardHash. */
+export function renderDeltaMarkdown(d: Delta, cardStatus: string, notes: string[] = []): string {
   const out: string[] = [
     '# Curb rerun delta',
+    '',
+    `> Policy card status: **${safeText(cardStatus)}**`,
     '',
     'This compares two scoped Curb results from the same control set. It is not a compliance statement, legal advice or a certification.',
     '',

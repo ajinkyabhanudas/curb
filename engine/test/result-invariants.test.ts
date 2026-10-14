@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseResultFile } from '../src/schema/result.ts';
 import type { ResultFile } from '../src/schema/types.ts';
-import { cli, cliSetup, forge, readResult } from './helpers.ts';
+import { CARD_PATH, cli, cliSetup, forge, readResult } from './helpers.ts';
 
 async function files() {
   const c = await cliSetup();
@@ -60,8 +60,8 @@ describe('forged results are refused by the CLI', () => {
     const forged = path.join(f.dir, 'forged.json');
     await writeFile(forged, JSON.stringify(forge(f.fail, (b) => void (b.state = 'pass'))));
     await expect(cli(f.reportArgs(forged))).rejects.toMatchObject(refused(/inconsistent with the body/));
-    await expect(cli(['diff', '--before', f.failPath, '--after', forged])).rejects.toMatchObject(refused(/inconsistent with the body/));
-    await expect(cli(['diff', '--before', forged, '--after', f.passPath])).rejects.toMatchObject(refused(/inconsistent with the body/));
+    await expect(cli(['diff', '--card', CARD_PATH, '--before', f.failPath, '--after', forged])).rejects.toMatchObject(refused(/inconsistent with the body/));
+    await expect(cli(['diff', '--card', CARD_PATH, '--before', forged, '--after', f.passPath])).rejects.toMatchObject(refused(/inconsistent with the body/));
   });
 
   it('report refuses a not-applicable result against an obligation that applies', async () => {
