@@ -683,3 +683,42 @@ describe('evaluate: registry entries added in card 1.1.0', () => {
     expect(out.findings.map((f) => f.providerId)).toEqual([...Object.values(pkgs), ...Object.values(hosts)]);
   });
 });
+
+describe('evaluate: registry entries added in card 1.2.0 (CURB-20)', () => {
+  it('maps each new package and host to its provider id', async () => {
+    const pkgs = { '@openrouter/ai-sdk-provider': 'openrouter', '@openrouter/sdk': 'openrouter', '@openrouter/agent': 'openrouter' };
+    const hosts = {
+      'openrouter.ai': 'openrouter', 'api.together.ai': 'togetherai', 'api.fireworks.ai': 'fireworks',
+      'api.deepinfra.com': 'deepinfra', 'api.moonshot.ai': 'moonshotai',
+    };
+    const src = [
+      ...Object.keys(pkgs).map((p, i) => `import p${i} from '${p}';`),
+      ...Object.keys(hosts).map((h) => `fetch('https://${h}/v1/x');`),
+      '',
+    ].join('\n');
+    const out = await run({ 'a.ts': src });
+    expect(out.findings.map((f) => f.providerId)).toEqual([...Object.values(pkgs), ...Object.values(hosts)]);
+  });
+
+  it('flags an OpenRouter base URL held as an object property value, and passes once openrouter is allowed', async () => {
+    const files = { 'route.ts': 'const client = { baseURL: "https://openrouter.ai/api/v1" };\n' };
+    const blocked = await run(files);
+    expect(blocked.state).toBe('fail');
+    expect(blocked.findings.map((f) => f.providerId)).toEqual(['openrouter']);
+    expect((await run(files, ['anthropic', 'openrouter'])).state).toBe('pass');
+  });
+
+  it('does not flag look-alike hosts for the new entries', async () => {
+    const out = await run({
+      'a.ts': [
+        "fetch('https://openrouter.ai.evil.example/x');",
+        "fetch('https://notopenrouter.ai/x');",
+        "fetch('https://api.together.ai.example/x');",
+        "const doc = 'see openrouter.ai for details';",
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+});

@@ -75,3 +75,7 @@ H2 asks whether unsupported or ambiguous cases give `unknown`, not `pass`. On th
 - One synthetic obligation and one allowlist.
 - The probe removed files by hand. It shows a path to `PASS`, not how often it occurs.
 - Counsel has not approved the policy card; nothing here is a compliance statement.
+
+## Follow-up (CURB-20)
+
+Card 1.2.0 registers `openrouter.ai`. Rescanning the same commit with the same synthetic obligation gives 24 findings (was 22): the `openrouter.ai` base URL in `app/api/chat/openrouter/route.ts:24`, and a second `openrouter.ai` fetch in `lib/models/fetch-models.ts:84` that the first scan did not report. The false-pass probe above still returns `PASS` once the files with findings and the unknown files are removed (CURB-19 is open). This note is otherwise left as the record of the 1.1.0 scan.

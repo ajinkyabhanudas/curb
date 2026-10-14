@@ -16,7 +16,7 @@ This report checks configured engineering evidence against one human-confirmed c
 
 **PASS**: No references outside the allowlist were found in the evaluated files, within this rule's scope only. This does not establish compliance.
 
-Rule: `unapproved-provider-reference` v`1.1.0`. Files evaluated: 1.
+Rule: `unapproved-provider-reference` v`1.2.0`. Files evaluated: 1.
 
 ## Confirmed obligation
 
@@ -45,11 +45,11 @@ None.
 
 ## Inputs and hashes
 
-- Result hash: `07b7bc63d84f85114ee8c0623f80afcd0f63ba2046863a867864006a912158b6`
+- Result hash: `6cd0735fe0cfc1e2d5f4b4bb241bb9b1b287f734a45833f789b7fb47a7ad745c`
 - Tree hash: `f21bc9824224ad088504e3091f036c446a5fa32963e17ed4e1832ee329c86018`
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
-- Obligation id: `e92db1434f69d1636fd85d7ab14fec8fb0e0fc857caf33cd1e0dc5a565d2d8f5`
-- Policy card hash: `0ce817e252a4520e565deca4d7fe8afee8972690c6d120d1c89e67e6a255aefe`
+- Obligation id: `3c3dc0e5f185574bc8bfd1d179b6a43899bc395480c8b2027d5ada7e9bfc92ae`
+- Policy card hash: `0553ce5f2ab37a77d72d511852326e3f955c22c4107843e9288ac6ee27ee18fd`
 - Evaluator version: `0.3.0+typescript-5.9.3`
 
 ## Run

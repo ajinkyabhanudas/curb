@@ -2,7 +2,7 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` version 1.1.0, evaluator 0.3.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.2.0, evaluator 0.3.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
@@ -63,7 +63,7 @@ npm run -s curb -- confirm --card $CARD --agreement $AGR --quote "$Q" --allow an
   --approver demo-approver --at 2026-10-13T09:00:00Z --store $W/store --out $W/obligation.json
 ```
 
-The obligation id is `802716ec6ebdb6420ea7413f96a33644c34cd7f57d336c318f560affde1616c2`; the quote sits at range 384 to 490 of the normalized agreement text.
+The obligation id is `8922ad62e0aa27f0704dc5292d6daf889e1cebe36180bb064273653753b9460c`; the quote sits at range 384 to 490 of the normalized agreement text.
 
 2. Scan the mutated fixture (imports `@ai-sdk/openai`):
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:95783b6f8a801fb49c7f9177e12d568fe8da9b0299f5b3cba66254adc972349e
+result sha256:ae3ea37c9196c7ba9a5b8577a04df1af55e7872b538c96848ef2d17113fa5e97
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:fcc648619ec53f0e37f04cef5e437c30c1305dcad221daebe2f1de393c82a5dc
+result sha256:b1fccc631ce5c2dda680e5a918799df492b7f81e10882a34c4c254cdbfccc530
 ```
 
 4. Diff the two runs:
@@ -132,11 +132,11 @@ npm run -s curb -- report --card $CARD --agreement $AGR --obligation $W/obligati
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v`1.1.0`. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.2.0`. Files evaluated: 2.
 ...
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
-| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `18d94778774d` |
+| `openai` | `lib/ai/providers.ts:2:24` | `import { openai } from '@ai-sdk/openai';` | `04edcb8a7d76` |
 ```
 
 The report also lists the confirmed obligation, exclusions and every input hash (result, tree, agreement, obligation, policy card, evaluator version), then the run envelope (start and finish time, operator, tenant). The envelope is outside the hash, so those times differ between runs.
@@ -199,7 +199,7 @@ Which files are looked at:
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
 - A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
 
-A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.1.0 registers 21 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
+A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.2.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
 It does not check, and the card lists these as non-claims: which provider receives data at runtime, provider conduct, retention or training use, dead code, proxy rerouting, or whether the allowlist matches the signed agreement.
 

@@ -1,6 +1,6 @@
 {
   "id": "unapproved-provider-reference",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "status": "draft, pending counsel approval",
   "owner": "unassigned (to be named by the product owner)",
   "reviewDate": "2026-10-13",
@@ -50,7 +50,9 @@
     "Model-identifier literals whose model part (slug) is without a digit or hyphen (for example 'openai/chatgpt') are not flagged; this keeps paths such as google/fonts and meta/robots out",
     "Model-identifier literals for providers not in the registry (a prefix missing from registry.gatewayPrefixes) are not flagged",
     "Object keys, interface member names, destructuring keys and computed keys that hold a model identifier are not flagged",
-    "The Vercel AI Gateway host (ai-gateway.vercel.sh) is a proxy, not a provider: URLs to it are not flagged, and the provider it routes to is decided at runtime"
+    "The Vercel AI Gateway host (ai-gateway.vercel.sh) is a proxy, not a provider: URLs to it are not flagged, and the provider it routes to is decided at runtime",
+    "OpenRouter (openrouter.ai) is registered as its own provider id because it receives the request content: an allowlist must include openrouter to permit it. The providers it then routes to are decided at runtime and are not visible to the scan",
+    "Hosts not verified against vendor documentation are not in the registry. api.together.xyz is the default in some third-party integrations while Together's own docs give api.together.ai; api.moonshot.cn was found only on third-party pages. Azure and Bedrock hosts are per-region subdomains and cannot be matched because host matching is exact"
   ],
   "evidenceBoundaries": [
     "Findings show where source references a provider, not where traffic goes at runtime"
@@ -86,7 +88,10 @@
       "@ai-sdk/fireworks": "fireworks",
       "@ai-sdk/deepinfra": "deepinfra",
       "@ai-sdk/togetherai": "togetherai",
-      "@ai-sdk/azure": "azure"
+      "@ai-sdk/azure": "azure",
+      "@openrouter/ai-sdk-provider": "openrouter",
+      "@openrouter/sdk": "openrouter",
+      "@openrouter/agent": "openrouter"
     },
     "hosts": {
       "api.openai.com": "openai",
@@ -98,7 +103,12 @@
       "api.cohere.com": "cohere",
       "api.cohere.ai": "cohere",
       "api.perplexity.ai": "perplexity",
-      "api.groq.com": "groq"
+      "api.groq.com": "groq",
+      "openrouter.ai": "openrouter",
+      "api.together.ai": "togetherai",
+      "api.fireworks.ai": "fireworks",
+      "api.deepinfra.com": "deepinfra",
+      "api.moonshot.ai": "moonshotai"
     },
     "gatewayPrefixes": {
       "openai": "openai",
