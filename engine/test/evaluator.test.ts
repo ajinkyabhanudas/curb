@@ -2,7 +2,7 @@
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { IGNORABLE_EXT, evaluate, scanFile } from '../src/evaluator/evaluate.ts';
+import { EVALUATOR_VERSION, IGNORABLE_EXT, evaluate, scanFile } from '../src/evaluator/evaluate.ts';
 import { loadCard, type PolicyCard } from '../src/policy/card.ts';
 import { takeSnapshot } from '../src/snapshot/snapshot.ts';
 import { CARD_PATH, makeRepo } from './helpers.ts';
@@ -284,7 +284,7 @@ describe('evaluate: file types outside the source and ignorable sets (final revi
 
   const IGNORABLE = (
     'md markdown txt rst json jsonc yaml yml toml ini cfg conf env lock log csv tsv xml svg png jpg jpeg gif webp avif ' +
-    'ico bmp tiff woff woff2 ttf otf eot pdf zip gz tar tgz map css scss sass less sql graphql gql prisma ' +
+    'ico bmp tiff woff woff2 ttf otf eot pdf zip gz tar tgz map css scss sass less sql graphql gql prisma mdc ' +
     'local example sample template dist ' +
     'wasm node so dll dylib exe bin jar class o a pyc db sqlite sqlite3 mp3 mp4 mov webm ogg wav flac avi psd icns heic'
   ).split(' ');
@@ -478,5 +478,208 @@ describe('evaluate: binary entries never hide an unlisted language (re-review re
   it('keeps a binary .ts file unknown (unreadable)', async () => {
     const out = await run({ 'a.ts': 'a\u0000b', 'ok.ts': '1' });
     expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
+  });
+});
+
+describe('evaluate: model-identifier literals anywhere in source (real-repo gap, card 1.1.0)', () => {
+  it('bumps the evaluator version for the widened detection and minified rule', () => {
+    expect(EVALUATOR_VERSION).toBe('0.3.0');
+  });
+
+  const one = async (src: string, allowlist = ['anthropic'], name = 'a.ts') => run({ [name]: src }, allowlist);
+
+  it('flags a model id inside an array of objects, with the literal reason text', async () => {
+    const src = 'export const models = [\n  { id: "anthropic/claude-sonnet-4-5" },\n  { id: "openai/gpt-5-mini" },\n];\n';
+    const out = await one(src);
+    expect(out.state).toBe('fail');
+    expect(out.findings).toHaveLength(1);
+    const f = out.findings[0];
+    expect(f.providerId).toBe('openai');
+    expect(f.matched).toBe('openai/gpt-5-mini');
+    expect(f.evidence.line).toBe(3);
+    expect(f.evidence.start).toBe(src.indexOf('"openai/gpt-5-mini"'));
+    expect(f.evidence.reason).toBe(
+      'model identifier literal "openai/gpt-5-mini" resolves to provider "openai", which is not in the allowlist',
+    );
+  });
+
+  it('flags a model id as an object property value, a default parameter and a variable initializer', async () => {
+    expect((await one('const cfg = { model: "xai/grok-4.1-fast" };\n')).findings.map((f) => f.providerId)).toEqual(['xai']);
+    expect((await one('export function pick(m = "deepseek/deepseek-v3.2") { return m; }\n')).findings.map((f) => f.providerId)).toEqual(['deepseek']);
+    expect((await one('export const DEFAULT_MODEL = "moonshotai/kimi-k2.5";\n')).findings.map((f) => f.providerId)).toEqual(['moonshotai']);
+  });
+
+  it('flags a model id inside a satisfies or as const object', async () => {
+    const src = 'type M = { id: string };\nexport const a = { id: "openai/gpt-5" } satisfies M;\nexport const b = { id: "mistral/mistral-large-2" } as const;\n';
+    expect((await one(src)).findings.map((f) => f.matched)).toEqual(['openai/gpt-5', 'mistral/mistral-large-2']);
+  });
+
+  it('flags a model id as a JSX attribute value and as a no-substitution template', async () => {
+    const jsx = 'export const C = () => <ModelPicker value="google/gemini-2.5-pro" />;\n';
+    expect((await one(jsx, ['anthropic'], 'c.tsx')).findings.map((f) => f.providerId)).toEqual(['google']);
+    expect((await one('export const m = `openai/gpt-5`;\n')).findings.map((f) => f.matched)).toEqual(['openai/gpt-5']);
+  });
+
+  it('matches the prefix and slug in any case', async () => {
+    const out = await one('export const m = "OpenAI/GPT-5";\n');
+    expect(out.findings.map((f) => `${f.providerId}:${f.matched}`)).toEqual(['openai:OpenAI/GPT-5']);
+  });
+
+  it('does not flag a model id of an allowed provider', async () => {
+    const out = await one('export const m = "anthropic/claude-sonnet-4-5";\nexport const n = "openai/gpt-5";\n', ['anthropic', 'openai']);
+    expect(out.state).toBe('pass');
+  });
+
+  it('does not flag slugs without a digit or hyphen, empty or nested slugs, or strings without a slash', async () => {
+    const src = [
+      'export const a = "google/fonts";',
+      'export const b = "meta/robots";',
+      'export const c = "openai/";',
+      'export const d = "openai/gpt-5/extra";',
+      'export const e = "openai";',
+      'export const f = "gpt-5";',
+      'export const g = "/openai/gpt-5";',
+      'export const h = "unregistered/model-1";',
+      '',
+    ].join('\n');
+    const out = await one(src);
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('does not flag display-name maps, object keys, bare provider-name arrays or comments', async () => {
+    const src = [
+      'export const names = { openai: "OpenAI", xai: "xAI", deepseek: "DeepSeek" };',
+      'export const byId = { "openai/gpt-5": 1, ["xai/grok-4"]: 2 };',
+      'export const order = ["fireworks", "bedrock", "openai", "xai"];',
+      '// fallback was "openai/gpt-5" once',
+      '/* and "xai/grok-4" */',
+      'interface P { "openai/gpt-5": string }',
+      'const { "xai/grok-4": picked } = byId as Record<string, number>;',
+      '',
+    ].join('\n');
+    const out = await one(src);
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  it('reports a provider-package import once, by the package rule only', async () => {
+    const out = await one('import x from "openai/resources";\nexport const y = require("@ai-sdk/openai/internal-2");\n');
+    expect(out.findings.map((f) => f.evidence.reason.split(' "')[0])).toEqual(['import of package', 'load of package']);
+  });
+
+  it('does not treat module names as model ids', async () => {
+    const src = [
+      'export * from "xai/grok-4";',
+      'export type T = typeof import("xai/grok-4");',
+      'import r = require("xai/grok-4");',
+      'declare module "xai/grok-4" { export const v: string; }',
+      'const p = import("xai/grok-4");',
+      'const q = require.resolve("xai/grok-4");',
+      '',
+    ].join('\n');
+    const out = await one(src, ["anthropic"], "m.ts");
+    expect(out.findings).toEqual([]);
+  });
+
+  it('keeps the declared-constructor check: same finding id, no duplicate, constructor reason wins', async () => {
+    const src = "gateway('openai/gpt-5');\ngateway.languageModel('xai/x');\n";
+    const out = await one(src);
+    expect(out.findings).toHaveLength(2);
+    expect(out.findings.map((f) => f.evidence.reason)).toEqual([
+      'model identifier "openai/gpt-5" resolves to provider "openai", which is not in the allowlist',
+      'model identifier "xai/x" resolves to provider "xai", which is not in the allowlist',
+    ]);
+    // the literal rule alone would find the first one at the same offset, so the id is unchanged
+    const plain = await one("const m = 'openai/gpt-5';\n");
+    expect(plain.findings[0].evidence.reason.startsWith('model identifier literal')).toBe(true);
+  });
+
+  it('flags a literal model id passed to an aliased constructor or a tagged template', async () => {
+    const out = await one('const g = gateway;\ng("openai/gpt-5");\ngateway`xai/grok-4`;\n');
+    expect(out.findings.map((f) => f.providerId)).toEqual(['openai', 'xai']);
+  });
+
+  it('flags the newly registered gateway prefixes', async () => {
+    const prefixes = ['deepseek', 'moonshotai', 'meta', 'cohere', 'perplexity', 'alibaba', 'minimax', 'zai', 'amazon', 'nvidia'];
+    const src = prefixes.map((p, i) => `export const m${i} = "${p}/model-${i}";`).join('\n') + '\n';
+    const out = await one(src);
+    expect(out.findings.map((f) => f.providerId)).toEqual(prefixes);
+  });
+});
+
+describe('evaluate: minified heuristic by share of bytes in long lines', () => {
+  const svgPath = `M${Array.from({ length: 260 }, (_, i) => `${i % 9}.5 ${i % 7}`).join('L')}Z`;
+
+  it('evaluates an ordinary TSX file with one long SVG path line', async () => {
+    const lines = ['export function Icon() {', '  return (', '    <svg viewBox="0 0 24 24">'];
+    lines.push(`      <path d="${svgPath.padEnd(1300, '0').slice(0, 1300)}" />`);
+    lines.push('    </svg>', '  );', '}', '');
+    for (let i = 0; i < 110; i++) lines.push(`export const value${i} = ${i}; // ordinary line number ${i} of filler code`);
+    const src = `${lines.join('\n')}\n`;
+    expect(src.split('\n').filter((l) => l.length > 1000)).toHaveLength(1);
+    const out = await run({ 'icons.tsx': src });
+    expect(out.unknownFiles).toEqual([]);
+    expect(out.state).toBe('pass');
+    expect(out.filesEvaluated).toBe(1);
+  });
+
+  it('reports a one-line 5,000-char file and a file of three 2,000-char lines as minified', async () => {
+    const out = await run({
+      'one.js': `var s="${'x'.repeat(4990)}";`,
+      'three.js': [1, 2, 3].map((n) => `var s${n}="${'y'.repeat(1990)}";`).join('\n'),
+    });
+    expect(out.unknownFiles).toEqual([
+      { path: 'one.js', reason: 'minified' },
+      { path: 'three.js', reason: 'minified' },
+    ]);
+  });
+
+  it('draws the line at more than half of the file bytes in long lines', async () => {
+    const long = `var s="${'z'.repeat(1191)}";`; // 1,200 chars
+    // n bytes of short comment lines (100 chars each), so only the first line is long
+    const filler = (n: number) => {
+      let f = '';
+      while (n - f.length > 100) f += `//${'c'.repeat(97)}\n`;
+      const r = n - f.length;
+      return f + (r >= 2 ? `//${'c'.repeat(r - 2)}` : ' '.repeat(r));
+    };
+    // total = 1200 + 1 newline + filler
+    const under = `${long}\n${filler(1200)}`; // 1200 of 2401 bytes
+    const exact = `${long}\n${filler(1199)}`; // 1200 of 2400 bytes: not more than half
+    const over = `${long}\n${filler(1198)}`; // 1200 of 2399 bytes
+    expect([under.length, exact.length, over.length]).toEqual([2401, 2400, 2399]);
+    expect(under.split('\n').filter((l) => l.length > 1000)).toHaveLength(1);
+    const out = await run({ 'under.js': under, 'exact.js': exact, 'over.js': over });
+    expect(out.unknownFiles).toEqual([{ path: 'over.js', reason: 'minified' }]);
+  });
+
+  it('still treats .min.js by name as minified and keeps the generated-header rule', async () => {
+    const out = await run({ 'tiny.min.js': 'var a = 1;\n', 'gen.ts': '// Code generated, DO NOT EDIT\nexport const a = 1;\n', 'ok.ts': '1' });
+    expect(out.unknownFiles).toEqual([
+      { path: 'gen.ts', reason: 'generated' },
+      { path: 'tiny.min.js', reason: 'minified' },
+    ]);
+  });
+});
+
+describe('evaluate: registry entries added in card 1.1.0', () => {
+  it('maps each new package and host to its provider id', async () => {
+    const pkgs = {
+      '@ai-sdk/deepseek': 'deepseek', '@ai-sdk/cohere': 'cohere', '@ai-sdk/perplexity': 'perplexity', '@ai-sdk/groq': 'groq',
+      '@ai-sdk/amazon-bedrock': 'bedrock', '@aws-sdk/client-bedrock-runtime': 'bedrock', '@ai-sdk/fireworks': 'fireworks',
+      '@ai-sdk/deepinfra': 'deepinfra', '@ai-sdk/togetherai': 'togetherai', '@ai-sdk/azure': 'azure',
+    };
+    const hosts = {
+      'api.deepseek.com': 'deepseek', 'api.cohere.com': 'cohere', 'api.cohere.ai': 'cohere', 'api.perplexity.ai': 'perplexity',
+      'api.groq.com': 'groq',
+    };
+    const src = [
+      ...Object.keys(pkgs).map((p, i) => `import p${i} from '${p}';`),
+      ...Object.keys(hosts).map((h) => `fetch('https://${h}/v1/x');`),
+      '',
+    ].join('\n');
+    const out = await run({ 'a.ts': src });
+    expect(out.findings.map((f) => f.providerId)).toEqual([...Object.values(pkgs), ...Object.values(hosts)]);
   });
 });
