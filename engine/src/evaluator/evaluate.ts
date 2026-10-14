@@ -7,7 +7,7 @@ import type { Finding, ResultState, UnknownFile, UnknownReason } from '../schema
 import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 
 // Bump on any change to what is flagged or reported unknown: diff refuses to compare results across versions.
-export const EVALUATOR_VERSION = '0.3.0';
+export const EVALUATOR_VERSION = '0.4.0';
 
 // Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned; it is the
 // single source of truth for that list (the card and docs repeat it). Every other extension is unknown
@@ -132,14 +132,37 @@ function fileProblem(file: SnapshotFile): UnknownReason | undefined {
 }
 
 // One long line (an SVG path, a class string) does not make a file minified; most of its bytes being in long lines does.
+// In a .tsx/.jsx file, single-line JSX attribute strings (SVG path data in `d="..."`) are markup data, not code, so
+// their bytes do not count towards the long-line share. Every other string still counts, so a bundle stays minified.
 function looksMinified(filePath: string, content: string): boolean {
   if (/\.min\.(js|mjs|cjs)$/.test(filePath)) return true;
   const total = Buffer.byteLength(content, 'utf8');
+  if (total === 0) return false;
+  const lines = content.split('\n');
   let long = 0;
-  for (const line of content.split('\n')) {
+  for (const line of lines) {
     if (line.length > MAX_LINE_LENGTH) long += Buffer.byteLength(line, 'utf8');
   }
-  return total > 0 && long > total * MINIFIED_LONG_LINE_SHARE;
+  if (long <= total * MINIFIED_LONG_LINE_SHARE) return false;
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.tsx' && ext !== '.jsx') return true;
+  return long - jsxAttributeBytesOnLongLines(filePath, content, lines) > total * MINIFIED_LONG_LINE_SHARE;
+}
+
+function jsxAttributeBytesOnLongLines(filePath: string, content: string, lines: string[]): number {
+  const kind = filePath.toLowerCase().endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.JSX;
+  const source = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, false, kind);
+  let bytes = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
+      const text = content.slice(node.initializer.getStart(source), node.initializer.end);
+      const line = source.getLineAndCharacterOfPosition(node.initializer.getStart(source)).line;
+      if (!text.includes('\n') && lines[line].length > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return bytes;
 }
 
 function looksGenerated(content: string): boolean {
