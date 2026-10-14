@@ -2,7 +2,7 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` version 1.2.0, evaluator 0.4.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.3.0, evaluator 0.5.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 336 tests
+npm test            # vitest, 364 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -63,7 +63,7 @@ npm run -s curb -- confirm --card $CARD --agreement $AGR --quote "$Q" --allow an
   --approver demo-approver --at 2026-10-13T09:00:00Z --store $W/store --out $W/obligation.json
 ```
 
-The obligation id is `8922ad62e0aa27f0704dc5292d6daf889e1cebe36180bb064273653753b9460c`; the quote sits at range 384 to 490 of the normalized agreement text.
+The obligation id is `18f764e1ca82bd7a2631e9fdb341a73770f3a2f72de1425119e7135e2eb83c2e`; the quote sits at range 384 to 490 of the normalized agreement text.
 
 2. Scan the mutated fixture (imports `@ai-sdk/openai`):
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:5adb537fc1fd0fe528b097d3efabc05bcf7b099f0b8702465ebf5e44dacedf97
+result sha256:48751d9e670a0fc5ff33379c92417d61adfde44d3bb0e041b4ca6f29bc025da6
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:fa135f52d6b49aeac804f49974353a941da5e4f03cffa060c46a821abdfea8f1
+result sha256:22ff719e2859b58ba8c9bf735bb50eb077b44a8a6373771e5b518955ef9fccc8
 ```
 
 4. Diff the two runs:
@@ -132,7 +132,7 @@ npm run -s curb -- report --card $CARD --agreement $AGR --obligation $W/obligati
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v`1.2.0`. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.3.0`. Files evaluated: 2.
 ...
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
@@ -175,7 +175,7 @@ Precedence for an evaluated scan: `error > fail > unknown > pass`.
 |---|---|---|
 | `pass` | Every in-scope file parsed, at least one file was evaluated, and no reference outside the allowlist was found. Scope-limited evidence, not compliance. | no findings, no unknown files, at least one file evaluated |
 | `fail` | At least one reference to a registered provider outside the allowlist. One finding per occurrence. | at least one finding |
-| `unknown` | Something could not be checked and nothing failed: a non-excluded file is a symlink, unparseable, generated or minified, of a file type that is neither analyzed nor on the ignorable list, or over the size cap; or no file could be evaluated (note `no-evaluable-files`). Affected files are listed. | at least one unknown file, or the note `no-evaluable-files` |
+| `unknown` | Something could not be checked and nothing failed: a non-excluded file is a symlink, unparseable, generated, minified or catalog-shaped (a list of bare model ids), of a file type that is neither analyzed nor on the ignorable list, or over the size cap; or no file could be evaluated (note `no-evaluable-files`). Affected files are listed. | at least one unknown file, or the note `no-evaluable-files` |
 | `not-applicable` | A named human recorded applicability `not-applicable` on the obligation. The evaluator never returns this state; the scan skips evaluation and notes `human-recorded-not-applicable`. | no findings, no unknown files, zero files evaluated |
 | `error` | The evaluator threw outside per-file analysis (a failure inside one file makes that file `unknown`). Not a verdict and never a pass. The exception text goes to stderr only, not into the result file. V1 has no evaluator timeout; the per-file size cap bounds work. | no findings, zero files evaluated |
 
@@ -189,6 +189,7 @@ Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs
 2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
 3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
 4. Model-identifier literals anywhere in source (since card 1.1.0): a string literal or no-substitution template whose whole text is `<prefix>/<slug>`, where the prefix (any case) is a registered gateway prefix, the slug is `[a-z0-9][a-z0-9._:-]*` with no further `/`, and the slug contains a digit or hyphen. This catches catalogs such as `{ id: "openai/gpt-5-mini" }` that reach a constructor through a variable. `google/fonts` and `meta/robots` are not flagged (no digit or hyphen). Module names in imports, `require`, `import()`, import types and `declare module` are left to rule 1, object, interface, destructuring and computed keys are skipped, and a literal that is also a declared-constructor argument is reported once, by rule 3.
+5. Provider assignments (since card 1.3.0): a string literal assigned to a name that ends in `provider` or `providerId` (ignoring case and separators: `provider`, `modelProvider`, `LLM_PROVIDER`, `llm-provider`) and equals a registered provider ID. Targets are object properties, class fields, JSX attributes, variable declarations, parameter defaults and assignments (`=`, `||=`, `??=`, `&&=`, `x.provider`, `x["provider"]`), looking through `as`, `satisfies`, parentheses, `!`, `<const>`, `??`, `||`, `&&` (right side only) and the branches of a ternary. Not examined: shorthand `{ provider }`, values from variables, comparisons, `switch` cases, enum values, arrays of names. Login and UI choices (`signInWithOAuth({ provider: "google" })`, `<AuthButton provider="azure" />`) and cloud, identity or framework names (`cloudProvider: "azure"`, `identityProvider: "google"`, `dataProvider: "groq"`) are flagged too; the card lists them as known false positives.
 
 Which files are looked at:
 
@@ -198,8 +199,9 @@ Which files are looked at:
 - Binary content (a NUL byte in the first 8 KiB, which includes UTF-16 text) is never analyzed. It is skipped for never-scanned types and for files with no extension; under any other extension (`.ts`, `.sh`, `.py`, `.ps1`, ...) the file is `unknown` (`unreadable`), because it may be a script. An extensionless file over the size cap is `unknown` (`too-large`) since it is never read; this is deliberately conservative.
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
 - A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. In a `.tsx` or `.jsx` file, single-line JSX attribute strings (such as SVG `d="..."` path data) do not count towards that share, so a small icon component is evaluated; every other string still counts. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
+- A file is `unknown` (`catalog`) when at least 6 of its string values are bare model ids from known families (for example `llama3-8b-8192`) and they make up at least 20% of its string literals. Keys, type literals and module specifiers count towards neither side of the share. The file is still scanned and can still produce findings; the reason is listed in addition. The thresholds rest on one real repository.
 
-A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.2.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
+A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.3.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
 It does not check, and the card lists these as non-claims: which provider receives data at runtime, provider conduct, retention or training use, dead code, proxy rerouting, or whether the allowlist matches the signed agreement.
 

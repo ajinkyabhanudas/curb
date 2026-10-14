@@ -1,13 +1,13 @@
 // engine/src/evaluator/evaluate.ts
 import path from 'node:path';
 import ts from 'typescript';
-import { own, type PolicyCard } from '../policy/card.ts';
+import { own, registryProviderIds, type PolicyCard } from '../policy/card.ts';
 import { compareStrings as compare, findingId } from '../schema/hashing.ts';
 import type { Finding, ResultState, UnknownFile, UnknownReason } from '../schema/types.ts';
 import type { Snapshot, SnapshotFile } from '../snapshot/snapshot.ts';
 
 // Bump on any change to what is flagged or reported unknown: diff refuses to compare results across versions.
-export const EVALUATOR_VERSION = '0.4.0';
+export const EVALUATOR_VERSION = '0.5.0';
 
 // Only SOURCE_EXT files are analyzed. IGNORABLE_EXT names non-code file types that are never scanned; it is the
 // single source of truth for that list (the card and docs repeat it). Every other extension is unknown
@@ -29,6 +29,19 @@ export const IGNORABLE_EXT = new Set(
 const MAX_LINE_LENGTH = 1000;
 // A file is minified when more than this share of its bytes sits in lines longer than MAX_LINE_LENGTH.
 const MINIFIED_LONG_LINE_SHARE = 0.5;
+// A name that says it holds a provider: `provider`, `providerId`, `provider_id`, `embeddings_provider`, `modelProvider`,
+// `LLM_PROVIDER`, `llm-provider`. Compared after lowercasing and dropping every non-alphanumeric character.
+const PROVIDER_KEY = /provider(id)?$/;
+// A bare model id from a known family, with no provider prefix (`llama3-8b-8192`). A digit or hyphen is required.
+const MODEL_FAMILIES =
+  'gpt-|chatgpt-|claude-|gemini-|llama|mixtral|mistral-|open-mistral|open-mixtral|codestral|pixtral|ministral|magistral|command-r|deepseek|qwen|sonar|grok-|o[1-9]|gemma|phi-|pplx-|kimi-|glm-|whisper-|dall-e-|text-embedding-';
+const BARE_MODEL_ID = new RegExp(`^(${MODEL_FAMILIES})[a-z0-9._:-]*$`);
+// Global, for counting quoted candidates with String.prototype.match before the file is parsed.
+const BARE_MODEL_ID_QUOTED = new RegExp(`["'\`](?:${MODEL_FAMILIES})`, 'g');
+// A file is catalog-shaped when it holds at least this many bare model ids as values and they are at least this
+// share of its string literals. Such a file names providers in a way the scan cannot map, so it is unknown.
+const CATALOG_MIN_IDS = 6;
+const CATALOG_MIN_SHARE = 0.2;
 // A whole-literal model identifier: `<prefix>/<slug>`, with the slug free of further slashes.
 const MODEL_ID = /^([^/]+)\/([a-z0-9][a-z0-9._:-]*)$/i;
 // Any `scheme://` literal is a candidate URL; new URL() then decides whether it has a hostname.
@@ -76,6 +89,8 @@ export function evaluate(
       const found = scanFileFn(file.path, file.sha256 as string, file.content as string, card, allowlist);
       for (const finding of found) findings.set(finding.id, finding);
       filesEvaluated++;
+      // Scanned like any file, but also listed: a catalog of bare model ids can name providers the scan cannot see.
+      if (looksLikeCatalog(file.path, file.content as string)) unknownFiles.push({ path: file.path, reason: 'catalog' });
     } catch {
       unknownFiles.push({ path: file.path, reason: 'parse-error' });
     }
@@ -217,10 +232,87 @@ function isPropertyName(node: ts.Node): boolean {
   return 'name' in parent && parent.name === node && !ts.isModuleDeclaration(parent);
 }
 
+// Bare model ids held as values (not keys, type literals or module specifiers), and their share of all string literals.
+export function looksLikeCatalog(filePath: string, content: string): boolean {
+  if ((content.match(BARE_MODEL_ID_QUOTED) ?? []).length < CATALOG_MIN_IDS) return false;
+  const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.ESNext, true);
+  let ids = 0;
+  let strings = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      const parent = node.parent;
+      const isSpecifier =
+        ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) ||
+        ts.isExternalModuleReference(parent) ||
+        (ts.isCallExpression(parent) && parent.arguments[0] === node && /^(require|import)$/.test(parent.expression.getText(sf)));
+      // Keys and type literals are names, not values: they count towards neither side of the share.
+      if (!isSpecifier && !isPropertyName(node) && !ts.isLiteralTypeNode(parent)) {
+        strings++;
+        if (BARE_MODEL_ID.test(node.text) && /[0-9-]/.test(node.text)) ids++;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return ids >= CATALOG_MIN_IDS && ids / strings >= CATALOG_MIN_SHARE;
+}
+
+const ASSIGNMENT_TOKENS = [
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+];
+const isProviderName = (name: string): boolean => PROVIDER_KEY.test(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+function nameText(name: ts.Node): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
+  if (ts.isComputedPropertyName(name) && (ts.isStringLiteral(name.expression) || ts.isNoSubstitutionTemplateLiteral(name.expression))) {
+    return name.expression.text;
+  }
+  if (ts.isJsxNamespacedName(name)) return name.name.text;
+  return undefined;
+}
+
+// The literal is the value of a provider-named property, class field, JSX attribute, default parameter or assignment
+// target. Wrappers that keep the value are looked through: `as`, `satisfies`, parentheses, `!`, <const>, `??`, `||`,
+// `&&` and the branches of a ternary.
+function isProviderPropertyValue(node: ts.Node): boolean {
+  const passes = [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken];
+  let child: ts.Node = node;
+  let parent = node.parent;
+  while (
+    ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent) || ts.isParenthesizedExpression(parent) ||
+    ts.isNonNullExpression(parent) || ts.isTypeAssertionExpression(parent) || ts.isJsxExpression(parent) ||
+    (ts.isBinaryExpression(parent) &&
+      passes.includes(parent.operatorToken.kind) &&
+      // the left side of && is a condition, not the value
+      !(parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && parent.left === child)) ||
+    (ts.isConditionalExpression(parent) && parent.condition !== child)
+  ) {
+    child = parent;
+    parent = parent.parent;
+  }
+  let name: string | undefined;
+  if ((ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.initializer === child) name = nameText(parent.name);
+  else if ((ts.isBindingElement(parent) || ts.isParameter(parent) || ts.isVariableDeclaration(parent)) && parent.initializer === child) {
+    name = nameText(parent.name);
+  }
+  else if (ts.isJsxAttribute(parent) && parent.initializer === child) name = nameText(parent.name);
+  else if (ts.isBinaryExpression(parent) && ASSIGNMENT_TOKENS.includes(parent.operatorToken.kind) && parent.right === child) {
+    const left = parent.left;
+    if (ts.isPropertyAccessExpression(left)) name = nameText(left.name);
+    else if (ts.isElementAccessExpression(left)) name = nameText(left.argumentExpression);
+    else if (ts.isIdentifier(left)) name = left.text;
+  }
+  return name !== undefined && isProviderName(name);
+}
+
 export function scanFile(filePath: string, fileSha: string, content: string, card: PolicyCard, allowlist: string[]): Finding[] {
   const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.ESNext, true);
   const lineStarts = sf.getLineStarts();
   const out: Finding[] = [];
+  const providerIds = new Set(registryProviderIds(card));
 
   function packageProvider(spec: string): string | undefined {
     for (const name of Object.keys(card.registry.packages)) {
@@ -315,6 +407,10 @@ export function scanFile(filePath: string, fileSha: string, content: string, car
     if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) claimed.add(node.name);
     if (isLiteral(node) && !claimed.has(node) && !isPropertyName(node)) {
       check(node, node.text, modelLiteralProvider(node.text), 'model identifier literal');
+    }
+    if (isLiteral(node) && isProviderPropertyValue(node)) {
+      const id = node.text.toLowerCase();
+      check(node, node.text, providerIds.has(id) ? id : undefined, 'provider property');
     }
     if (isLiteral(node)) check(node, node.text, hostProvider(node.text), 'URL');
     // A template URL counts only when the head fixes the whole host: it continues past the host with / ? or #
