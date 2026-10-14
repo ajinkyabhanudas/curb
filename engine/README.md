@@ -19,7 +19,7 @@ Node >= 24 (the CLI runs `.ts` files directly; there is no build step).
 ```
 cd engine
 npm install
-npm test            # vitest, 336 tests
+npm test            # vitest, 362 tests
 npm run typecheck   # tsc --noEmit
 ```
 
@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:b6d83b69c348f2d9e5dc35d3e0a31e15abd725b05b3ccca0ccd07202afe2639e
+result sha256:5ce8fc67b471003ab59f6ef782ffe72d32260ef87c82947a7007a4aabae95a7a
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:64df33b8393b7b11ca562bf158c3358a22edce11c5c74b7ac590a3f78db29421
+result sha256:6de91a68726b20db82ed41ddee0f03310ef507d2a3bad650d9fb92e619494acd
 ```
 
 4. Diff the two runs:
@@ -189,7 +189,7 @@ Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs
 2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
 3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
 4. Model-identifier literals anywhere in source (since card 1.1.0): a string literal or no-substitution template whose whole text is `<prefix>/<slug>`, where the prefix (any case) is a registered gateway prefix, the slug is `[a-z0-9][a-z0-9._:-]*` with no further `/`, and the slug contains a digit or hyphen. This catches catalogs such as `{ id: "openai/gpt-5-mini" }` that reach a constructor through a variable. `google/fonts` and `meta/robots` are not flagged (no digit or hyphen). Module names in imports, `require`, `import()`, import types and `declare module` are left to rule 1, object, interface, destructuring and computed keys are skipped, and a literal that is also a declared-constructor argument is reported once, by rule 3.
-5. Provider property values (since card 1.3.0): a string literal that is the value of a property named `provider`, `providerId`, `provider_id` or ending in `_provider` (looking through `as`, `satisfies` and parentheses) and equals a registered provider ID. Type positions, shorthand `{ provider }` and values from variables are not examined. A login object such as `signInWithOAuth({ provider: "google" })` is flagged too; the card lists it as a known false positive.
+5. Provider assignments (since card 1.3.0): a string literal assigned to a name that ends in `provider` or `providerId` (ignoring case and separators: `provider`, `modelProvider`, `LLM_PROVIDER`, `llm-provider`) and equals a registered provider ID. Targets are object properties, class fields, JSX attributes, default parameters and assignments, looking through `as`, `satisfies`, parentheses, `!`, `<const>`, `??`, `||`, `&&` and the branches of a ternary. Not examined: shorthand `{ provider }`, values from variables, comparisons, `switch` cases, enum values, arrays of names. A login object such as `signInWithOAuth({ provider: "google" })` or `<AuthButton provider="azure" />` is flagged too; the card lists it as a known false positive.
 
 Which files are looked at:
 
@@ -199,7 +199,7 @@ Which files are looked at:
 - Binary content (a NUL byte in the first 8 KiB, which includes UTF-16 text) is never analyzed. It is skipped for never-scanned types and for files with no extension; under any other extension (`.ts`, `.sh`, `.py`, `.ps1`, ...) the file is `unknown` (`unreadable`), because it may be a script. An extensionless file over the size cap is `unknown` (`too-large`) since it is never read; this is deliberately conservative.
 - A symlink is `unknown` whatever its name. A file over the 1 MiB cap or unreadable is `unknown` unless its type is on the never-scanned list.
 - A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. In a `.tsx` or `.jsx` file, single-line JSX attribute strings (such as SVG `d="..."` path data) do not count towards that share, so a small icon component is evaluated; every other string still counts. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
-- A file is `unknown` (`catalog`) when at least 6 of its string values are bare model ids from known families (for example `llama3-8b-8192`) and they make up at least 20% of its string literals. Keys, type literals and module specifiers do not count. The file is still scanned and can still produce findings; the reason is listed in addition. The thresholds rest on one real repository.
+- A file is `unknown` (`catalog`) when at least 6 of its string values are bare model ids from known families (for example `llama3-8b-8192`) and they make up at least 20% of its string literals. Keys, type literals and module specifiers count towards neither side of the share. The file is still scanned and can still produce findings; the reason is listed in addition. The thresholds rest on one real repository.
 
 A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.3.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
