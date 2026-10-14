@@ -76,7 +76,7 @@ FAIL  1 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
   lib/ai/providers.ts:2:24  openai  import { openai } from '@ai-sdk/openai';
 store: $W/store  tenant: demo
-result sha256:f9a42562c3a89d4e60435aeff7b1867205e98242df71a452fc80d447024b4312
+result sha256:ae3ea37c9196c7ba9a5b8577a04df1af55e7872b538c96848ef2d17113fa5e97
 ```
 
 Exit code 0: a finding is a successful run with a result.
@@ -91,7 +91,7 @@ npm run -s curb -- scan --card $CARD --agreement $AGR --obligation $W/obligation
 PASS  0 finding(s), 0 unknown file(s), 2 file(s) evaluated
 policy card status: draft, pending counsel approval
 store: $W/store  tenant: demo
-result sha256:6886aa9a167e8358ab8003a158b820f2fd74678e198cbbc00c259d71f145e399
+result sha256:b1fccc631ce5c2dda680e5a918799df492b7f81e10882a34c4c254cdbfccc530
 ```
 
 4. Diff the two runs:
