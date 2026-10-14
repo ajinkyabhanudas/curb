@@ -155,8 +155,9 @@ function jsxAttributeBytesOnLongLines(filePath: string, content: string, lines: 
   let bytes = 0;
   const visit = (node: ts.Node): void => {
     if (ts.isJsxAttribute(node) && node.initializer && ts.isStringLiteral(node.initializer)) {
-      const text = content.slice(node.initializer.getStart(source), node.initializer.end);
-      const line = source.getLineAndCharacterOfPosition(node.initializer.getStart(source)).line;
+      const start = node.initializer.getStart(source);
+      const text = content.slice(start, node.initializer.end);
+      const line = source.getLineAndCharacterOfPosition(start).line;
       if (!text.includes('\n') && lines[line].length > MAX_LINE_LENGTH) bytes += Buffer.byteLength(text, 'utf8');
     }
     ts.forEachChild(node, visit);
