@@ -17,8 +17,8 @@ describe('policy card', () => {
     const { card } = await loadCard(CARD_PATH);
     expect(registryProviderIds(card)).toEqual([
       'alibaba', 'amazon', 'anthropic', 'azure', 'bedrock', 'cohere', 'deepinfra', 'deepseek', 'fireworks', 'google',
-      'groq', 'meta', 'minimax', 'mistral', 'moonshotai', 'nvidia', 'openai', 'openrouter', 'perplexity', 'togetherai', 'xai',
-      'zai',
+      'groq', 'meta', 'minimax', 'mistral', 'moonshotai', 'nvidia', 'openai', 'openrouter', 'perplexity', 'togetherai', 'vertex',
+      'xai', 'zai',
     ]);
   });
 
@@ -64,12 +64,16 @@ describe('policy card', () => {
     const { card } = await loadCard(CARD_PATH);
     expect(card.registry.packages['@langchain/openai']).toBe('openai');
     expect(card.registry.packages['@langchain/aws']).toBe('bedrock');
-    expect(card.registry.packages['@langchain/google-vertexai']).toBe('google');
+    expect(card.registry.packages['@langchain/google-vertexai']).toBe('vertex');
+    expect(card.registry.packages['@ai-sdk/google-vertex']).toBe('vertex');
     const risks = card.falseNegativeRisks.join('\n');
     expect(risks).toMatch(/@langchain\/ollama/);
     expect(risks).toMatch(/@langchain\/community/);
+    expect(risks).toMatch(/@langchain\/google-gauth/);
     expect(risks).toMatch(/langchain\/embeddings/);
-    expect(risks).toMatch(/Vertex AI/);
+    expect(risks).toMatch(/kept apart from google/);
+    expect(risks).toMatch(/Azure classes/);
+    expect(risks).toMatch(/provider:model string form/);
   });
 
   it('1.3.0 describes provider property values and catalog files, and discloses their limits', async () => {

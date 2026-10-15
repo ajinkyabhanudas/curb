@@ -4,6 +4,8 @@ Status: DRAFT packet for CURB-23. Not a product claim.
 
 Goal: learn whether people who review AI-vendor contracts would use Curb's output, and what they would change. This answers "should the reviewer view (CURB-22) be built, changed or dropped" before any interface is built.
 
+Note: the sample reports were produced under policy card 1.3.0, so their card version and hashes are historical. Card 1.4.0 changed only the registry; the report wording is the same.
+
 ## What is here
 
 | File | Use |

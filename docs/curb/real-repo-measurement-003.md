@@ -62,15 +62,23 @@ H2 asks whether unsupported or ambiguous cases give `unknown`, not `pass`. Here 
 
 ## Follow-up (CURB-24)
 
-Card 1.4.0 registers the official `@langchain/*` provider packages (openai, anthropic, google-genai, google-vertexai, groq, mistralai, cohere, deepseek, xai, aws). Evaluator unchanged (0.5.0). Card hash `73da837e4bb9deea247ed7b46c749cb18b594e52224973641b308839fbf2fdce`. Same synthetic obligation text, allowlist `anthropic`, `--at 2026-10-13T09:00:00Z`, newly confirmed because the card version changed (a 1.3.0 obligation is refused).
+Card 1.4.0 registers the LangChain provider packages published from the langchainjs repository (`libs/providers`, checked 2026-10-15) whose provider is in the registry: `@langchain/openai`, `anthropic`, `google-genai`, `google`, `google-vertexai`, `google-vertexai-web`, `groq`, `mistralai`, `cohere`, `deepseek`, `xai`, `openrouter`, `fireworks`, `together-ai`, `perplexity`, `azure-openai` and `aws`, plus `@ai-sdk/google-vertex`. Vertex AI gets its own provider id `vertex`, apart from `google` (the Gemini API), so allowing one does not allow the other. Evaluator unchanged (0.5.0). Card hash `61c214038e1b6f75a37118931b26632c92a2999ee7aaca8f5a9314d6715c133c`. Same synthetic obligation text, allowlist `anthropic`, `--at 2026-10-13T09:00:00Z`, newly confirmed because the card version changed (a 1.3.0 obligation is refused).
 
 | Input | Card 1.3.0 | Card 1.4.0 |
 |---|---|---|
-| `langchain-ai/langchain-nextjs-template` at `fd4f2cd74e9d3b3f43b73a6429f25185d7be237b` (tree `51790d8d…`) | UNKNOWN, 0 findings, 1 unknown file | **FAIL**, 9 findings, 1 unknown file (the over-cap vendored yarn file), result `847f8b0d…` |
-| the same tree without that file | **PASS**, 0 findings | **FAIL**, 9 findings, 0 unknown files, result `759b33f4…` |
+| `langchain-ai/langchain-nextjs-template` at `fd4f2cd74e9d3b3f43b73a6429f25185d7be237b` (tree `51790d8d…`) | UNKNOWN, 0 findings, 1 unknown file | **FAIL**, 9 findings, 1 unknown file (the over-cap vendored yarn file), result `6f4dae31…` |
+| the same tree without that file | **PASS**, 0 findings | **FAIL**, 9 findings, 0 unknown files, result `980170c5…` |
 | `vercel/chatbot` at `c2f8235e` | FAIL, 13 findings | FAIL, 13 findings |
 | `mckaywrigley/chatbot-ui` at `81328b61` | FAIL, 53 findings, 7 unknown | FAIL, 53 findings, 7 unknown, same list |
 
-The 9 findings are the 9 files that import `@langchain/openai` (`app/ai_sdk/agent/action.ts`, `app/ai_sdk/tools/action.ts`, `app/api/chat/agents/route.ts`, `app/api/chat/retrieval/route.ts`, `app/api/chat/retrieval_agents/route.ts`, `app/api/chat/route.ts`, `app/api/chat/structured_output/route.ts`, `app/api/retrieval/ingest/route.ts`, `app/langgraph/agent/agent.ts`). Reruns of both langchain scans gave identical result hashes. The earlier "6 catalog unknown" for chatbot-ui was a count of the catalog files only; the unknown list is 6 catalog files plus `.husky/pre-commit` (unsupported-language), and it is the same under 1.3.0 and 1.4.0.
+The 9 findings are the 9 files that import `@langchain/openai` (`app/ai_sdk/agent/action.ts`, `app/ai_sdk/tools/action.ts`, `app/api/chat/agents/route.ts`, `app/api/chat/retrieval/route.ts`, `app/api/chat/retrieval_agents/route.ts`, `app/api/chat/route.ts`, `app/api/chat/structured_output/route.ts`, `app/api/retrieval/ingest/route.ts`, `app/langgraph/agent/agent.ts`). Reruns of the four scans gave identical result hashes. The 7 unknown files for chatbot-ui are 6 catalog files plus `.husky/pre-commit` (unsupported-language), as in measurement 002, and the list is the same under 1.3.0 and 1.4.0.
 
-What this closes: the false pass in this note. The scan now reports OpenAI use in this repo whether or not the vendored file is present. What it does not close: the 8 uses of the bare id `gpt-4o-mini` are still not mapped to a vendor by themselves (CURB-25), and a repo that reaches a provider through `@langchain/ollama`, `@langchain/community` or the legacy `langchain/*` subpaths is still not flagged (disclosed in the card's false-negative risks). Hypothesis H2 had one real-repository counterexample; it is now fixed for this case, and still rests on three repositories.
+What this closes: the false pass in this note. The scan now reports OpenAI use in this repo whether or not the vendored file is present.
+
+What it does not close:
+- The 8 files that pass the bare id `"gpt-4o-mini"` are still not mapped to a vendor by that id alone (CURB-25).
+- Not registered, so not flagged: `@langchain/ollama`, `@langchain/community`, `@langchain/google-gauth`, `@langchain/google-webauth`, `@langchain/google-common`, `@langchain/cloudflare`, `@langchain/ibm`, the legacy `langchain/chat_models/*` and `langchain/embeddings/*` subpaths, and any other `@langchain/*` package.
+- The provider reached depends on constructor arguments. `@langchain/openai` also exports Azure classes and accepts a base URL that can point at another vendor, so an allowlist of `openai` can pass Azure or a redirected endpoint. `@langchain/google` can reach the Gemini API and Vertex AI under one mapping to `google`.
+- LangChain's `provider:model` string form (for example `initChatModel('openai:gpt-4o')`) is not examined, and the source need not import any vendor package.
+
+Hypothesis H2 had one real-repository counterexample; it is now fixed for this case. It still rests on three repositories, and the package list above was taken from one upstream repository's directory, not from a census of how code reaches providers.

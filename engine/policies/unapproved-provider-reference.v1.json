@@ -56,7 +56,7 @@
     "The Vercel AI Gateway host (ai-gateway.vercel.sh) is a proxy, not a provider: URLs to it are not flagged, and the provider it routes to is decided at runtime",
     "OpenRouter (openrouter.ai) is registered as its own provider id because it receives the request content: an allowlist must include openrouter to permit it. The providers it then routes to are decided at runtime and are not visible to the scan",
     "Hosts not verified against vendor documentation are not in the registry. api.together.xyz is the default in some third-party integrations while Together's own docs give api.together.ai; api.moonshot.cn was found only on third-party pages. Azure and Bedrock hosts are per-region subdomains and cannot be matched because host matching is exact",
-    "Official @langchain/<vendor> packages are registered and map to that vendor's provider id, but the model actually used depends on constructor arguments that are often not literals. @langchain/aws maps to bedrock even for uses of the package that do not call Bedrock, and @langchain/google-vertexai maps to the google id, which then covers Google Cloud Vertex AI as well as the Gemini API. Not registered, so a call through them is not flagged by the package rule: @langchain/ollama (a local runtime unless pointed at a remote host), @langchain/community (many providers in one package), the legacy langchain/chat_models/* and langchain/embeddings/* subpaths, and any other @langchain/* package"
+    "Official @langchain/<vendor> packages are registered and map to the provider behind them: openai, anthropic, google-genai and google (google), google-vertexai and google-vertexai-web and @ai-sdk/google-vertex (vertex), groq, mistralai (mistral), cohere, deepseek, xai, openrouter, fireworks, together-ai (togetherai), perplexity, azure-openai (azure) and aws (bedrock). The vertex id is Google Cloud Vertex AI, kept apart from google (the Gemini API) so that allowing google does not allow Vertex. The provider actually reached depends on constructor arguments that are often not literals: @langchain/openai also exports Azure classes and accepts a base URL that can point at another vendor, so an allowlist of openai can pass Azure or a redirected endpoint; @langchain/aws maps to bedrock even for uses that do not call Bedrock; @langchain/google can reach both the Gemini API and Vertex AI. LangChain's provider:model string form (for example initChatModel('openai:gpt-4o')) is not examined, and the source need not import any vendor package. Not registered, so a call through them is not flagged by the package rule: @langchain/ollama (a local runtime unless pointed at a remote host), @langchain/community (many providers in one package), @langchain/google-gauth, @langchain/google-webauth and @langchain/google-common (Google authentication and shared-library packages), @langchain/cloudflare and @langchain/ibm (providers not in the registry), the legacy langchain/chat_models/* and langchain/embeddings/* subpaths, and any other @langchain/* package"
   ],
   "evidenceBoundaries": [
     "Findings show where source references a provider, not where traffic goes at runtime"
@@ -99,13 +99,21 @@
       "@langchain/openai": "openai",
       "@langchain/anthropic": "anthropic",
       "@langchain/google-genai": "google",
-      "@langchain/google-vertexai": "google",
+      "@langchain/google-vertexai": "vertex",
       "@langchain/groq": "groq",
       "@langchain/mistralai": "mistral",
       "@langchain/cohere": "cohere",
       "@langchain/deepseek": "deepseek",
       "@langchain/xai": "xai",
-      "@langchain/aws": "bedrock"
+      "@langchain/aws": "bedrock",
+      "@langchain/google": "google",
+      "@langchain/google-vertexai-web": "vertex",
+      "@langchain/openrouter": "openrouter",
+      "@langchain/fireworks": "fireworks",
+      "@langchain/together-ai": "togetherai",
+      "@langchain/perplexity": "perplexity",
+      "@langchain/azure-openai": "azure",
+      "@ai-sdk/google-vertex": "vertex"
     },
     "hosts": {
       "api.openai.com": "openai",
