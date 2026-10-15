@@ -28,4 +28,4 @@ Details, evidence and tool limits: `docs/workflow/product-principles.md`.
 - Downloaded or cloned code is untrusted: its own empty directory, nothing installed or run from it.
 - Process steps are advisory until a script, test or exit code backs them. A step with no check goes in `docs/process-gaps.md`.
 - Jira project `CURB` tracks the work. Never invent a ticket key. Merging code does not close an `owner-action` ticket.
-- Changes under the profile's high-risk paths: map dependents with `feature-dev:code-explorer` before editing, and get an independent review before merge.
+- Changes under the profile's high-risk paths: map dependents with `feature-dev:code-explorer` before editing, and get an independent review before merge. The PR body then carries a line `Independent review: <reviewer and verdict>`; CI checks that it is present and not a placeholder, not that the review happened.

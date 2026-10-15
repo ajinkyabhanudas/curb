@@ -20,7 +20,7 @@ kind: mechanical = exit code decides; advisory = no check backs it, log in docs/
 | typecheck | cd engine && npx tsc --noEmit | mechanical |
 | tests | cd engine && npx vitest run | mechanical |
 | lint | none | advisory |
-| independent review | none | advisory |
+| ticket key, independent review claimed | sh engine/scripts/check-pr-gates.sh (CI job `gates`) | mechanical for key format and a review line on high-risk PRs; ticket existence and the review itself are not checked |
 | security review | none | advisory |
 
 ## High-risk paths
