@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { ROOT } from './helpers.ts';
 
 const run = promisify(execFile);
@@ -11,6 +11,10 @@ const SCRIPT = path.join(ROOT, 'scripts/check-pr-gates.sh');
 
 const GIT = ['-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false'];
 const git = (cwd: string, ...args: string[]) => run('git', [...GIT, ...args], { cwd });
+const tempDirs: string[] = [];
+afterAll(async () => {
+  for (const d of tempDirs) await rm(d, { recursive: true, force: true });
+});
 
 // Paths that exist on the base branch, so a pull request can modify, rename or delete them.
 const BASE_FILES = [
@@ -37,6 +41,7 @@ interface Change {
 
 async function repoWithChange(change: Change): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), 'curb-gates-'));
+  tempDirs.push(dir);
   await git(dir, 'init', '-q', '-b', 'main');
   for (const f of BASE_FILES) {
     await mkdir(path.dirname(path.join(dir, f)), { recursive: true });
@@ -173,7 +178,15 @@ describe('PR gates: independent review on high-risk and gate paths', () => {
 
   it('fails when the base revision is not given or does not exist', async () => {
     expect((await gate({ base: null })).code).toBe(1);
-    expect((await gate({ base: 'no-such-branch' })).code).not.toBe(0);
+    const unknown = await gate({ base: 'no-such-branch' });
+    expect(unknown.code).toBe(128); // git's own fatal exit status, not a missing tool
+    expect(unknown.out).toMatch(/no-such-branch/);
+  });
+
+  it('refuses a base revision that starts with a dash instead of passing it to git as an option', async () => {
+    const r = await gate({ base: '--output=/tmp/pr-gates-option' });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/must not start with/);
   });
 
   it('rejects placeholder review lines', async () => {

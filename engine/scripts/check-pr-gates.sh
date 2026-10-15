@@ -9,8 +9,9 @@
 #
 # Limits: gate 1 checks the format of the key, not that the ticket exists in Jira. Gate 2 checks that a review is
 # claimed, not that it happened or what it found; it rejects placeholder values only, so a line inside a code fence or
-# an HTML comment still counts. On a pull_request event CI runs the PR's own copy of this script, so a PR could weaken
-# it; the gate files are therefore protected paths too, which makes that change ask for a review line, not impossible.
+# an HTML comment still counts. The gate files are protected paths too. In CI the workflow runs the base branch's copy of
+# this script, so editing the script inside a PR cannot switch the check off. Editing the workflow can: only a required
+# status check plus branch protection or CODEOWNERS on .github/ (owner settings in GitHub) closes that.
 set -eu
 
 # Keep in step with "High-risk paths" in docs/workflow/profile.md (a test compares the two).
@@ -39,6 +40,8 @@ fi
 changed=""
 if [ -z "$base" ]; then
   problem "BASE_REVISION is not set, so the changed paths cannot be checked"
+elif [ "${base#-}" != "$base" ]; then
+  problem "BASE_REVISION must not start with '-' (got: $base)"
 else
   # The pathspec makes git do the matching, and -z keeps unusual names intact. --no-renames and core.quotePath=false are
   # redundant with those two today (seeded defects that remove either are not caught); they are kept so that a rename

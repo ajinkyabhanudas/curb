@@ -31,4 +31,11 @@ jobs:
         run: |
           BASE_REVISION="origin/${BASE_REF}"
           export BASE_REVISION
-          sh engine/scripts/check-pr-gates.sh
+          # Run the base branch's copy of the script, so a PR cannot switch the check off by editing the script. The PR
+          # that first adds the script has no base copy and runs its own.
+          SCRIPT=engine/scripts/check-pr-gates.sh
+          if git cat-file -e "${BASE_REVISION}:engine/scripts/check-pr-gates.sh" 2>/dev/null; then
+            git show "${BASE_REVISION}:engine/scripts/check-pr-gates.sh" > "${RUNNER_TEMP}/check-pr-gates.sh"
+            SCRIPT="${RUNNER_TEMP}/check-pr-gates.sh"
+          fi
+          sh "$SCRIPT"
