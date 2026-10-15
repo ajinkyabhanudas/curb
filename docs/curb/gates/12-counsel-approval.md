@@ -3,7 +3,7 @@ Status: DRAFT memo for CURB-12. Not legal advice. The decision is counsel's or t
 # Gate 2: counsel review of the policy card
 
 ## Decision needed
-Approve, approve with changes, or reject policy card `unapproved-provider-reference` version 1.3.0, which ships as "draft, pending counsel approval". Record the approver's name and date.
+Approve, approve with changes, or reject policy card `unapproved-provider-reference` version 1.4.0, which ships as "draft, pending counsel approval". Record the approver's name and date.
 
 ## What approval would and would not mean
 The card defines what Curb counts as an unapproved provider reference. Approval would mean counsel agrees with that definition, its non-claims and its stated limits. It would not make any report a compliance certification and it would not assess any vendor. The reports already say so.
@@ -76,7 +76,7 @@ These came up in reviews of the card (CURB-12 comments, CURB-24, CURB-25):
 6. Who owns the model-family list the catalog check uses, and how often is it reviewed?
 7. Login and UI choices (`provider: "google"`, `<AuthButton provider="azure" />`) and cloud, identity or framework names are flagged. Accept the false positives, or exclude known libraries?
 8. (CURB-25) Should a bare model id from a single-vendor family (`gpt-`, `claude-`, `gemini-`, `grok-`) held as a `model` value count as a reference to that vendor?
-9. (CURB-24) Are wrapper-library packages such as `@langchain/openai` references to the provider behind them? What about `@langchain/google-vertexai` (Google Cloud) and `@langchain/ollama` (a local runtime)?
+9. (CURB-24) Card 1.4.0 treats the official wrapper packages `@langchain/openai`, `anthropic`, `google-genai`, `google-vertexai`, `groq`, `mistralai`, `cohere`, `deepseek`, `xai` and `aws` as references to the provider behind them (`aws` maps to `bedrock`, `google-vertexai` to `google`). It does not register `@langchain/ollama` (a local runtime), `@langchain/community` or the legacy `langchain/*` subpaths. Does counsel accept that a wrapper import counts as a reference, and that `google` covers Google Cloud Vertex AI as well as the Gemini API?
 
 ## Options
 1. **Approve as written**, with the questions above recorded as accepted limits.

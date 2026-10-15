@@ -1,6 +1,6 @@
 {
   "id": "unapproved-provider-reference",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "status": "draft, pending counsel approval",
   "owner": "unassigned (to be named by the product owner)",
   "reviewDate": "2026-10-13",
@@ -55,7 +55,8 @@
     "Bare model ids without a provider prefix (llama3-8b-8192) are never mapped to a provider. A catalog file is marked unknown only at 6 or more such values from the listed model families making up 20% or more of its string values (keys, type literals and module specifiers are not counted), so a catalog split into files of 5 or fewer ids, one padded with other strings, one of an unlisted family, or one with built or uppercase ids is neither flagged nor marked, and a formatting change alone can move a file across the threshold. The thresholds rest on a single real repository. A catalog that lists only allowed models is still marked unknown",
     "The Vercel AI Gateway host (ai-gateway.vercel.sh) is a proxy, not a provider: URLs to it are not flagged, and the provider it routes to is decided at runtime",
     "OpenRouter (openrouter.ai) is registered as its own provider id because it receives the request content: an allowlist must include openrouter to permit it. The providers it then routes to are decided at runtime and are not visible to the scan",
-    "Hosts not verified against vendor documentation are not in the registry. api.together.xyz is the default in some third-party integrations while Together's own docs give api.together.ai; api.moonshot.cn was found only on third-party pages. Azure and Bedrock hosts are per-region subdomains and cannot be matched because host matching is exact"
+    "Hosts not verified against vendor documentation are not in the registry. api.together.xyz is the default in some third-party integrations while Together's own docs give api.together.ai; api.moonshot.cn was found only on third-party pages. Azure and Bedrock hosts are per-region subdomains and cannot be matched because host matching is exact",
+    "Official @langchain/<vendor> packages are registered and map to that vendor's provider id, but the model actually used depends on constructor arguments that are often not literals. @langchain/aws maps to bedrock even for uses of the package that do not call Bedrock, and @langchain/google-vertexai maps to the google id, which then covers Google Cloud Vertex AI as well as the Gemini API. Not registered, so a call through them is not flagged by the package rule: @langchain/ollama (a local runtime unless pointed at a remote host), @langchain/community (many providers in one package), the legacy langchain/chat_models/* and langchain/embeddings/* subpaths, and any other @langchain/* package"
   ],
   "evidenceBoundaries": [
     "Findings show where source references a provider, not where traffic goes at runtime"
@@ -94,7 +95,17 @@
       "@ai-sdk/azure": "azure",
       "@openrouter/ai-sdk-provider": "openrouter",
       "@openrouter/sdk": "openrouter",
-      "@openrouter/agent": "openrouter"
+      "@openrouter/agent": "openrouter",
+      "@langchain/openai": "openai",
+      "@langchain/anthropic": "anthropic",
+      "@langchain/google-genai": "google",
+      "@langchain/google-vertexai": "google",
+      "@langchain/groq": "groq",
+      "@langchain/mistralai": "mistral",
+      "@langchain/cohere": "cohere",
+      "@langchain/deepseek": "deepseek",
+      "@langchain/xai": "xai",
+      "@langchain/aws": "bedrock"
     },
     "hosts": {
       "api.openai.com": "openai",

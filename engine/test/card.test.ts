@@ -40,9 +40,9 @@ describe('policy card', () => {
     expect(own({ a: 'x' }, '__proto__')).toBeUndefined();
   });
 
-  it('ships version 1.3.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
+  it('ships version 1.4.0, and any change to patterns, non-claims or registry changes the hash (final review A6)', async () => {
     const { card, hash } = await loadCard(CARD_PATH);
-    expect(card.version).toBe('1.3.0');
+    expect(card.version).toBe('1.4.0');
     expect(card.status).toBe('draft, pending counsel approval');
     const edits: ((c: typeof card) => void)[] = [
       (c) => c.approvedTextPatterns.push('extra'),
@@ -58,6 +58,18 @@ describe('policy card', () => {
       edit(copy);
       expect(hashOf(copy)).not.toBe(hash);
     }
+  });
+
+  it('1.4.0 registers the official LangChain provider packages and discloses what it leaves out', async () => {
+    const { card } = await loadCard(CARD_PATH);
+    expect(card.registry.packages['@langchain/openai']).toBe('openai');
+    expect(card.registry.packages['@langchain/aws']).toBe('bedrock');
+    expect(card.registry.packages['@langchain/google-vertexai']).toBe('google');
+    const risks = card.falseNegativeRisks.join('\n');
+    expect(risks).toMatch(/@langchain\/ollama/);
+    expect(risks).toMatch(/@langchain\/community/);
+    expect(risks).toMatch(/langchain\/embeddings/);
+    expect(risks).toMatch(/Vertex AI/);
   });
 
   it('1.3.0 describes provider property values and catalog files, and discloses their limits', async () => {

@@ -59,3 +59,18 @@ H2 asks whether unsupported or ambiguous cases give `unknown`, not `pass`. Here 
 - One synthetic obligation and one allowlist.
 - The "what the scan missed" list comes from grep, so it is a lower bound, not a complete audit.
 - Counsel has not approved the policy card; nothing here is a compliance statement.
+
+## Follow-up (CURB-24)
+
+Card 1.4.0 registers the official `@langchain/*` provider packages (openai, anthropic, google-genai, google-vertexai, groq, mistralai, cohere, deepseek, xai, aws). Evaluator unchanged (0.5.0). Card hash `73da837e4bb9deea247ed7b46c749cb18b594e52224973641b308839fbf2fdce`. Same synthetic obligation text, allowlist `anthropic`, `--at 2026-10-13T09:00:00Z`, newly confirmed because the card version changed (a 1.3.0 obligation is refused).
+
+| Input | Card 1.3.0 | Card 1.4.0 |
+|---|---|---|
+| `langchain-ai/langchain-nextjs-template` at `fd4f2cd74e9d3b3f43b73a6429f25185d7be237b` (tree `51790d8d…`) | UNKNOWN, 0 findings, 1 unknown file | **FAIL**, 9 findings, 1 unknown file (the over-cap vendored yarn file), result `847f8b0d…` |
+| the same tree without that file | **PASS**, 0 findings | **FAIL**, 9 findings, 0 unknown files, result `759b33f4…` |
+| `vercel/chatbot` at `c2f8235e` | FAIL, 13 findings | FAIL, 13 findings |
+| `mckaywrigley/chatbot-ui` at `81328b61` | FAIL, 53 findings, 7 unknown | FAIL, 53 findings, 7 unknown, same list |
+
+The 9 findings are the 9 files that import `@langchain/openai` (`app/ai_sdk/agent/action.ts`, `app/ai_sdk/tools/action.ts`, `app/api/chat/agents/route.ts`, `app/api/chat/retrieval/route.ts`, `app/api/chat/retrieval_agents/route.ts`, `app/api/chat/route.ts`, `app/api/chat/structured_output/route.ts`, `app/api/retrieval/ingest/route.ts`, `app/langgraph/agent/agent.ts`). Reruns of both langchain scans gave identical result hashes. The earlier "6 catalog unknown" for chatbot-ui was a count of the catalog files only; the unknown list is 6 catalog files plus `.husky/pre-commit` (unsupported-language), and it is the same under 1.3.0 and 1.4.0.
+
+What this closes: the false pass in this note. The scan now reports OpenAI use in this repo whether or not the vendored file is present. What it does not close: the 8 uses of the bare id `gpt-4o-mini` are still not mapped to a vendor by themselves (CURB-25), and a repo that reaches a provider through `@langchain/ollama`, `@langchain/community` or the legacy `langchain/*` subpaths is still not flagged (disclosed in the card's false-negative risks). Hypothesis H2 had one real-repository counterexample; it is now fixed for this case, and still rests on three repositories.

@@ -977,3 +977,69 @@ describe('evaluate: registry entries added in card 1.2.0 (CURB-20)', () => {
     expect(out.state).toBe('pass');
   });
 });
+
+describe('evaluate: registry entries added in card 1.4.0 (CURB-24)', () => {
+  const pkgs = {
+    '@langchain/openai': 'openai',
+    '@langchain/anthropic': 'anthropic',
+    '@langchain/google-genai': 'google',
+    '@langchain/google-vertexai': 'google',
+    '@langchain/groq': 'groq',
+    '@langchain/mistralai': 'mistral',
+    '@langchain/cohere': 'cohere',
+    '@langchain/deepseek': 'deepseek',
+    '@langchain/xai': 'xai',
+    '@langchain/aws': 'bedrock',
+  };
+
+  it('maps each official LangChain provider package to its provider id', async () => {
+    const src = Object.keys(pkgs).map((p, i) => `import p${i} from '${p}';`).join('\n') + '\n';
+    const out = await run({ 'a.ts': src }, []);
+    expect(out.state).toBe('fail');
+    expect(out.findings.map((f) => f.providerId)).toEqual(Object.values(pkgs));
+  });
+
+  // The measured false pass (measurement 003): a LangChain chat model with a bare model id and no direct provider import.
+  it('fails a repo that reaches OpenAI only through @langchain/openai, and passes once openai is allowed', async () => {
+    const files = {
+      'chat.ts': [
+        "import { ChatOpenAI } from '@langchain/openai';",
+        'export const model = new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0 });',
+        '',
+      ].join('\n'),
+    };
+    const blocked = await run(files);
+    expect(blocked.state).toBe('fail');
+    expect(blocked.findings.map((f) => f.providerId)).toEqual(['openai']);
+    expect((await run(files, ['anthropic', 'openai'])).state).toBe('pass');
+  });
+
+  it('flags subpaths, require and dynamic import of a registered package', async () => {
+    const out = await run({
+      'a.ts': [
+        "import { x } from '@langchain/anthropic/chat_models';",
+        "const y = require('@langchain/groq');",
+        "const z = await import('@langchain/mistralai');",
+        '',
+      ].join('\n'),
+    }, []);
+    expect(out.findings.map((f) => f.providerId)).toEqual(['anthropic', 'groq', 'mistral']);
+  });
+
+  it('does not flag provider-neutral LangChain packages, look-alikes or the undecided wrappers', async () => {
+    const out = await run({
+      'a.ts': [
+        "import { a } from '@langchain/core/messages';",
+        "import { b } from '@langchain/langgraph';",
+        "import { c } from '@langchain/openai-compatible-extra';",
+        "import { d } from '@langchain/ollama';",
+        "import { e } from '@langchain/community/chat_models/openai';",
+        "import { f } from 'langchain/chat_models/openai';",
+        "import { g } from '@aws-sdk/client-s3';",
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+});
