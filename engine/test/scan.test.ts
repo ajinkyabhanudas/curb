@@ -81,6 +81,32 @@ describe('runScan gates', () => {
     await expect(runScan({ ...input, agreement: ingestAgreement('# Other\n') })).rejects.toThrow(/agreement/);
   });
 
+  // Guards a false pass (CURB-46): runScan checks the card itself, not only the earlier confirmObligation check.
+  it('refuses an obligation that was confirmed against another version or id of the card', async () => {
+    const { input } = await setup('applies');
+    const agreement = input.agreement;
+    const confirmAgainst = (card: typeof input.card) =>
+      confirmObligation(
+        {
+          agreementTextSha256: agreement.textSha256,
+          quote: QUOTE,
+          range: locateQuote(agreement.text, QUOTE),
+          policyCardId: card.id,
+          policyCardVersion: card.version,
+          applicability: 'applies',
+          allowlist: ['anthropic'],
+          approver: 'Test Reviewer',
+          approvedAt: '2026-10-13T09:00:00.000Z',
+        },
+        agreement,
+        card,
+      );
+    const otherVersion = confirmAgainst({ ...input.card, version: '9.9.9' });
+    await expect(runScan({ ...input, obligation: otherVersion })).rejects.toThrow(/different policy card or version/);
+    const otherId = confirmAgainst({ ...input.card, id: 'some-other-rule' });
+    await expect(runScan({ ...input, obligation: otherId })).rejects.toThrow(/different policy card or version/);
+  });
+
   it('returns error, not pass, when the evaluator throws', async () => {
     const { input } = await setup('applies');
     const { body } = await runScan(input, () => {
