@@ -997,3 +997,99 @@ describe('evaluate: registry entries added in card 1.2.0 (CURB-20)', () => {
     expect(out.state).toBe('pass');
   });
 });
+
+describe('evaluate: registry entries added in card 1.4.0 (CURB-24)', () => {
+  // The LangChain provider packages in the langchainjs repo (libs/providers) whose provider is in the registry, plus the older
+  // @langchain/azure-openai and @ai-sdk/google-vertex.
+  const pkgs = {
+    '@langchain/openai': 'openai',
+    '@langchain/anthropic': 'anthropic',
+    '@langchain/google-genai': 'google',
+    '@langchain/google': 'google',
+    '@langchain/google-vertexai': 'vertex',
+    '@langchain/google-vertexai-web': 'vertex',
+    '@ai-sdk/google-vertex': 'vertex',
+    '@langchain/groq': 'groq',
+    '@langchain/mistralai': 'mistral',
+    '@langchain/cohere': 'cohere',
+    '@langchain/deepseek': 'deepseek',
+    '@langchain/xai': 'xai',
+    '@langchain/openrouter': 'openrouter',
+    '@langchain/fireworks': 'fireworks',
+    '@langchain/together-ai': 'togetherai',
+    '@langchain/perplexity': 'perplexity',
+    '@langchain/azure-openai': 'azure',
+    '@langchain/aws': 'bedrock',
+  };
+
+  it('maps each registered LangChain and Vertex package to its provider id', async () => {
+    const src = Object.keys(pkgs).map((p, i) => `import p${i} from '${p}';`).join('\n') + '\n';
+    const out = await run({ 'a.ts': src }, []);
+    expect(out.state).toBe('fail');
+    expect(out.findings.map((f) => f.providerId)).toEqual(Object.values(pkgs));
+  });
+
+  // The measured false pass (measurement 003): a LangChain chat model with a bare model id and no direct provider import.
+  it('fails a repo that reaches OpenAI only through @langchain/openai, and passes once openai is allowed', async () => {
+    const files = {
+      'chat.ts': [
+        "import { ChatOpenAI } from '@langchain/openai';",
+        'export const model = new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0 });',
+        '',
+      ].join('\n'),
+    };
+    const blocked = await run(files);
+    expect(blocked.state).toBe('fail');
+    expect(blocked.findings.map((f) => f.providerId)).toEqual(['openai']);
+    expect((await run(files, ['anthropic', 'openai'])).state).toBe('pass');
+  });
+
+  // Encodes the current policy choice that vertex is its own id (memo 12, item 9); counsel may change it.
+  it('does not let allowing google allow Vertex AI, or the reverse', async () => {
+    const files = { 'a.ts': "import { ChatVertexAI } from '@langchain/google-vertexai';\n" };
+    expect((await run(files, ['google'])).state).toBe('fail');
+    expect((await run(files, ['vertex'])).state).toBe('pass');
+    expect((await run({ 'a.ts': "import { ChatGoogleGenerativeAI } from '@langchain/google-genai';\n" }, ['vertex'])).state).toBe('fail');
+  });
+
+  it('flags subpaths, require and dynamic import of a registered package', async () => {
+    const out = await run({
+      'a.ts': [
+        "import { x } from '@langchain/anthropic/chat_models';",
+        "const y = require('@langchain/groq');",
+        "const z = await import('@langchain/mistralai');",
+        '',
+      ].join('\n'),
+    }, []);
+    expect(out.findings.map((f) => f.providerId)).toEqual(['anthropic', 'groq', 'mistral']);
+  });
+
+  it('does not flag provider-neutral LangChain packages or look-alikes', async () => {
+    const out = await run({
+      'a.ts': [
+        "import { a } from '@langchain/core/messages';",
+        "import { b } from '@langchain/langgraph';",
+        "import { c } from '@langchain/openai-compatible-extra';",
+        "import { g } from '@aws-sdk/client-s3';",
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+    expect(out.state).toBe('pass');
+  });
+
+  // Documents the card as it is today. These are disclosed false negatives; counsel decides whether they stay (memo 12, item 9).
+  it('documents what card 1.4.0 leaves unflagged: undecided wrappers, legacy subpaths and the provider:model string form', async () => {
+    const out = await run({
+      'a.ts': [
+        "import { d } from '@langchain/ollama';",
+        "import { e } from '@langchain/community/chat_models/openai';",
+        "import { h } from '@langchain/google-gauth';",
+        "import { f } from 'langchain/chat_models/openai';",
+        "const m = await initChatModel('openai:gpt-4o');",
+        '',
+      ].join('\n'),
+    });
+    expect(out.findings).toEqual([]);
+  });
+});
