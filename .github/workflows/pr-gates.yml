@@ -1,0 +1,41 @@
+name: pr-gates
+
+# CURB-35. Checks the pull request itself: a CURB ticket key on the branch and title, and an "Independent review:"
+# line in the body when a high-risk path changes. `edited` re-runs the check when the body is updated.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  # No `if:` condition, so the job cannot be skipped. A skipped job can satisfy a required check.
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Actions are pinned to commit SHAs (checkout v7.0.1).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Branch name, title and body are attacker-controlled text. They reach the script only through env, never
+      # through ${{ }} inside the shell script.
+      - name: Check the pull request gates
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          BASE_REVISION="origin/${BASE_REF}"
+          export BASE_REVISION
+          # Run the base branch's copy of the script, so a PR cannot switch the check off by editing the script. The PR
+          # that first adds the script has no base copy and runs its own.
+          SCRIPT=engine/scripts/check-pr-gates.sh
+          if git cat-file -e "${BASE_REVISION}:engine/scripts/check-pr-gates.sh" 2>/dev/null; then
+            git show "${BASE_REVISION}:engine/scripts/check-pr-gates.sh" > "${RUNNER_TEMP}/check-pr-gates.sh"
+            SCRIPT="${RUNNER_TEMP}/check-pr-gates.sh"
+          fi
+          sh "$SCRIPT"
