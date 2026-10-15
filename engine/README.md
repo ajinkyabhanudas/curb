@@ -2,7 +2,7 @@
 
 A TypeScript library and CLI that checks one human-confirmed contract commitment against a local source tree, using one deterministic rule. It produces evidence (file, line, hash), a Markdown or JSON report, and a delta between two runs. No LLM and no network access are involved in the verdict.
 
-Current rule: `unapproved-provider-reference` version 1.3.0, evaluator 0.5.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
+Current rule: `unapproved-provider-reference` version 1.4.0, evaluator 0.5.0 (is any AI model provider referenced in TypeScript or JavaScript source that is not on the customer's allowlist).
 
 ## What this does not claim
 
@@ -132,7 +132,7 @@ npm run -s curb -- report --card $CARD --agreement $AGR --obligation $W/obligati
 
 **FAIL**: At least one reference to a provider outside the allowlist was found. See the findings table for exact locations.
 
-Rule: `unapproved-provider-reference` v`1.3.0`. Files evaluated: 2.
+Rule: `unapproved-provider-reference` v`1.4.0`. Files evaluated: 2.
 ...
 | Provider | Location | Excerpt | Finding ID |
 |---|---|---|---|
@@ -185,7 +185,7 @@ Precedence for an evaluated scan: `error > fail > unknown > pass`.
 
 Using the TypeScript compiler API on `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts` and `.cts` files (extension matched case-insensitively, declaration files included), it flags:
 
-1. Import, `require`, `require.resolve`, dynamic `import()` and import-type (`typeof import('openai')`, `import('openai').T`) specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/openai`; each package is listed by name, so `@ai-sdk/react` is not a provider).
+1. Import, `require`, `require.resolve`, dynamic `import()` and import-type (`typeof import('openai')`, `import('openai').T`) specifiers of registered provider packages (for example `openai`, `@anthropic-ai/sdk`, `@ai-sdk/openai`, and since card 1.4.0 the official `@langchain/<vendor>` provider packages such as `@langchain/openai`; each package is listed by name, so `@ai-sdk/react` is not a provider).
 2. URL literals with any `scheme://` (https, wss and others) whose host is a registered provider host, ignoring case and one trailing dot; and template URLs whose literal head contains the whole host followed by `/`, `?` or `#`.
 3. The first string-literal argument of a declared model-constructor call (`gateway`, `gateway.languageModel`) whose prefix, in any case, resolves to a registered provider.
 4. Model-identifier literals anywhere in source (since card 1.1.0): a string literal or no-substitution template whose whole text is `<prefix>/<slug>`, where the prefix (any case) is a registered gateway prefix, the slug is `[a-z0-9][a-z0-9._:-]*` with no further `/`, and the slug contains a digit or hyphen. This catches catalogs such as `{ id: "openai/gpt-5-mini" }` that reach a constructor through a variable. `google/fonts` and `meta/robots` are not flagged (no digit or hyphen). Module names in imports, `require`, `import()`, import types and `declare module` are left to rule 1, object, interface, destructuring and computed keys are skipped, and a literal that is also a declared-constructor argument is reported once, by rule 3.
@@ -201,7 +201,7 @@ Which files are looked at:
 - A file is `unknown` (`minified`) when its name ends in `.min.js`, `.min.mjs` or `.min.cjs`, or when more than half of its bytes sit in lines longer than 1000 characters. In a `.tsx` or `.jsx` file, single-line JSX attribute strings (such as SVG `d="..."` path data) do not count towards that share, so a small icon component is evaluated; every other string still counts. One long line (an SVG path or a long class string) in an otherwise ordinary file does not make it minified. A file whose first five lines say `@generated`, `auto-generated` or `do not edit` is `unknown` (`generated`).
 - A file is `unknown` (`catalog`) when at least 6 of its string values are bare model ids from known families (for example `llama3-8b-8192`) and they make up at least 20% of its string literals. Keys, type literals and module specifiers count towards neither side of the share. The file is still scanned and can still produce findings; the reason is listed in addition. The thresholds rest on one real repository.
 
-A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.3.0 registers 22 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, xai, zai. Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
+A registry in the card maps package, host and model prefix to a provider ID; the allowlist is a set of those IDs. Card 1.4.0 registers 23 provider IDs: alibaba, amazon, anthropic, azure, bedrock, cohere, deepinfra, deepseek, fireworks, google, groq, meta, minimax, mistral, moonshotai, nvidia, openai, openrouter, perplexity, togetherai, vertex, xai, zai (`vertex` is Google Cloud Vertex AI, kept apart from `google`). Some (bedrock, fireworks, deepinfra, groq, togetherai, azure) are known only by package or host, not by gateway prefix. Exclusions (`.git` at any depth, plus the card's `node_modules`, `.next`, `dist` and lockfiles) are recorded in every report.
 
 It does not check, and the card lists these as non-claims: which provider receives data at runtime, provider conduct, retention or training use, dead code, proxy rerouting, or whether the allowlist matches the signed agreement.
 
