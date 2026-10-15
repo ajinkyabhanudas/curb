@@ -29,6 +29,6 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          CHANGED_FILES="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
-          export CHANGED_FILES
+          BASE_REVISION="origin/${BASE_REF}"
+          export BASE_REVISION
           sh engine/scripts/check-pr-gates.sh
