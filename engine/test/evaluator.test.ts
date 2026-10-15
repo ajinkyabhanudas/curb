@@ -208,6 +208,17 @@ describe('evaluate: non-ok snapshot entries never pass', () => {
     expect(out.unknownFiles).toEqual([{ path: 'a.ts', reason: 'unreadable' }]);
   });
 
+  // Guards a false pass (CURB-42): an extensionless file the scan could not read must not be dropped as "not code".
+  it('reports an unreadable file with no extension as unknown, not a pass', async (ctx) => {
+    if (process.getuid?.() === 0) return ctx.skip();
+    const dir = await makeRepo({ Makefile: 'all:\n', 'ok.ts': 'export const a = 1;\n' });
+    await chmod(path.join(dir, 'Makefile'), 0o000);
+    const out = await runDir(dir);
+    await chmod(path.join(dir, 'Makefile'), 0o644);
+    expect(out.state).toBe('unknown');
+    expect(out.unknownFiles).toEqual([{ path: 'Makefile', reason: 'unreadable' }]);
+  });
+
   it('reports a binary source file as unknown but ignores a binary image', async () => {
     const out = await run({ 'a.ts': 'abc\u0000def', 'img.png': 'abc\u0000def', 'ok.ts': '1' });
     expect(out.state).toBe('unknown');
@@ -734,6 +745,15 @@ describe('evaluate: provider property values (CURB-19, rule A)', () => {
     });
     expect(ids(out)).toEqual(['groq', 'mistral', 'deepseek', 'openai', 'cohere']);
     expect(out.findings[0].evidence.reason).toMatch(/provider property/);
+  });
+
+  // Guards a false pass (CURB-43): a differently cased value must still resolve to the registry id.
+  it('matches a provider value regardless of case', async () => {
+    const out = await run({
+      'a.ts': ['export const a = { provider: "OpenAI" };', 'export const b = { providerId: "GROQ" };', ''].join('\n'),
+    });
+    expect(out.state).toBe('fail');
+    expect(ids(out)).toEqual(['openai', 'groq']);
   });
 
   it('passes once the provider is allowlisted', async () => {
