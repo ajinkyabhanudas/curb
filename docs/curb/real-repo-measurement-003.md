@@ -62,12 +62,12 @@ H2 asks whether unsupported or ambiguous cases give `unknown`, not `pass`. Here 
 
 ## Follow-up (CURB-24)
 
-Card 1.4.0 registers the LangChain provider packages published from the langchainjs repository (`libs/providers`, checked 2026-10-15) whose provider is in the registry: `@langchain/openai`, `anthropic`, `google-genai`, `google`, `google-vertexai`, `google-vertexai-web`, `groq`, `mistralai`, `cohere`, `deepseek`, `xai`, `openrouter`, `fireworks`, `together-ai`, `perplexity`, `azure-openai` and `aws`, plus `@ai-sdk/google-vertex`. Vertex AI gets its own provider id `vertex`, apart from `google` (the Gemini API), so allowing one does not allow the other. Evaluator unchanged (0.5.0). Card hash `61c214038e1b6f75a37118931b26632c92a2999ee7aaca8f5a9314d6715c133c`. Same synthetic obligation text, allowlist `anthropic`, `--at 2026-10-13T09:00:00Z`, newly confirmed because the card version changed (a 1.3.0 obligation is refused).
+Card 1.4.0 registers the LangChain provider packages in the langchainjs repository (`libs/providers`, listed 2026-10-15) whose provider is in the registry: `@langchain/openai`, `anthropic`, `google-genai`, `google`, `google-vertexai`, `google-vertexai-web`, `groq`, `mistralai`, `cohere`, `deepseek`, `xai`, `openrouter`, `fireworks`, `together-ai`, `perplexity` and `aws`, plus the older `@langchain/azure-openai` and `@ai-sdk/google-vertex`. Vertex AI gets its own provider id `vertex`, apart from `google` (the Gemini API), so allowing one does not allow the other. Evaluator unchanged (0.5.0). Card hash `0f0a3a66f4af16feb926850369d48fe7e967e8efd8ae5982bcfc13171a26d6f8`. Same synthetic obligation text, allowlist `anthropic`, `--at 2026-10-13T09:00:00Z`, newly confirmed because the card version changed (a 1.3.0 obligation is refused).
 
 | Input | Card 1.3.0 | Card 1.4.0 |
 |---|---|---|
-| `langchain-ai/langchain-nextjs-template` at `fd4f2cd74e9d3b3f43b73a6429f25185d7be237b` (tree `51790d8d…`) | UNKNOWN, 0 findings, 1 unknown file | **FAIL**, 9 findings, 1 unknown file (the over-cap vendored yarn file), result `6f4dae31…` |
-| the same tree without that file | **PASS**, 0 findings | **FAIL**, 9 findings, 0 unknown files, result `980170c5…` |
+| `langchain-ai/langchain-nextjs-template` at `fd4f2cd74e9d3b3f43b73a6429f25185d7be237b` (tree `51790d8d…`) | UNKNOWN, 0 findings, 1 unknown file | **FAIL**, 9 findings, 1 unknown file (the over-cap vendored yarn file), result `04df2ce4…` |
+| the same tree without that file | **PASS**, 0 findings | **FAIL**, 9 findings, 0 unknown files, result `b41d5e47…` |
 | `vercel/chatbot` at `c2f8235e` | FAIL, 13 findings | FAIL, 13 findings |
 | `mckaywrigley/chatbot-ui` at `81328b61` | FAIL, 53 findings, 7 unknown | FAIL, 53 findings, 7 unknown, same list |
 
@@ -78,7 +78,7 @@ What this closes: the false pass in this note. The scan now reports OpenAI use i
 What it does not close:
 - The 8 files that pass the bare id `"gpt-4o-mini"` are still not mapped to a vendor by that id alone (CURB-25).
 - Not registered, so not flagged: `@langchain/ollama`, `@langchain/community`, `@langchain/google-gauth`, `@langchain/google-webauth`, `@langchain/google-common`, `@langchain/cloudflare`, `@langchain/ibm`, the legacy `langchain/chat_models/*` and `langchain/embeddings/*` subpaths, and any other `@langchain/*` package.
-- The provider reached depends on constructor arguments. `@langchain/openai` also exports Azure classes and accepts a base URL that can point at another vendor, so an allowlist of `openai` can pass Azure or a redirected endpoint. `@langchain/google` can reach the Gemini API and Vertex AI under one mapping to `google`.
+- The provider reached depends on constructor arguments. `@langchain/openai` also exports Azure classes (`AzureChatOpenAI`) and accepts a base URL that can point at another vendor (both in the LangChain.js documentation), so an allowlist of `openai` can pass Azure or a redirected endpoint, and an allowlist of `azure` alone gets a false finding for those Azure classes. `@langchain/google` is mapped to `google` without reading which Google service its configuration selects.
 - LangChain's `provider:model` string form (for example `initChatModel('openai:gpt-4o')`) is not examined, and the source need not import any vendor package.
 
 Hypothesis H2 had one real-repository counterexample; it is now fixed for this case. It still rests on three repositories, and the package list above was taken from one upstream repository's directory, not from a census of how code reaches providers.

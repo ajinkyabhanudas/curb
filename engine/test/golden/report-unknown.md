@@ -45,11 +45,11 @@ None.
 
 ## Inputs and hashes
 
-- Result hash: `91d9cdaf5ac2223212ec6aa6b85b7dbb7f34c5134f9cee6080a2288fabab9901`
+- Result hash: `5abe28bfbdc6a5fe47c5004237fecd9d756259a4fa2326d32a7ee7e47a815d88`
 - Tree hash: `2892a1cdc75fa706b206b4c9866e4d23e192236644e7acce002789d70311ab09`
 - Agreement text hash: `21a6dde011355c9acc49dc090d49f11a816c4fc94fde255dda5c7156e35e0bfe`
 - Obligation id: `eae15021a19375298afaf142d88c02ad7cb4c649d601e1fe5d1865f43e471fd9`
-- Policy card hash: `61c214038e1b6f75a37118931b26632c92a2999ee7aaca8f5a9314d6715c133c`
+- Policy card hash: `0f0a3a66f4af16feb926850369d48fe7e967e8efd8ae5982bcfc13171a26d6f8`
 - Evaluator version: `0.5.0+typescript-5.9.3`
 
 ## Run

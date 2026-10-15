@@ -979,7 +979,8 @@ describe('evaluate: registry entries added in card 1.2.0 (CURB-20)', () => {
 });
 
 describe('evaluate: registry entries added in card 1.4.0 (CURB-24)', () => {
-  // Every published provider package in the langchainjs repo (libs/providers) whose provider is in the registry.
+  // The LangChain provider packages in the langchainjs repo (libs/providers) whose provider is in the registry, plus the older
+  // @langchain/azure-openai and @ai-sdk/google-vertex.
   const pkgs = {
     '@langchain/openai': 'openai',
     '@langchain/anthropic': 'anthropic',
@@ -1023,6 +1024,7 @@ describe('evaluate: registry entries added in card 1.4.0 (CURB-24)', () => {
     expect((await run(files, ['anthropic', 'openai'])).state).toBe('pass');
   });
 
+  // Encodes the current policy choice that vertex is its own id (memo 12, item 9); counsel may change it.
   it('does not let allowing google allow Vertex AI, or the reverse', async () => {
     const files = { 'a.ts': "import { ChatVertexAI } from '@langchain/google-vertexai';\n" };
     expect((await run(files, ['google'])).state).toBe('fail');
