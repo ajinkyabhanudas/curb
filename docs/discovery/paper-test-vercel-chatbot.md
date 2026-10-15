@@ -61,6 +61,12 @@ Provisional tally: 5 act (1 to 5), 1 conditional (8), 1 maybe (6), 2 noise candi
 - The research supports the questions. It does not show Curb's answer helps. Whether the builder would act is still the owner's call.
 - The strong questions (3, 4, 5) are the ones Curb can least answer from code. If those are the valuable ones, the product is mostly a prompt to gather evidence, plus a provider check. That bears on how much detector work (PRD R9) is worth doing.
 
+## Owner decision (2026-10-15)
+
+The product owner accepted the provisional ratings above as approved for now, without reviewing them, and asked that their validity come out through testing and that questions be retired if they are not useful afterwards. So questions 1 to 5 and 8 are `trial` questions and 6 is a `trial` at lowest rank; 7 and 9 stay out of v0. These are not owner marks: nobody has yet said which question they would act on and why.
+
+How validity gets tested: each run records act, maybe or noise per question (CURB-41, requirement R3b in the PRD). Retire rule, proposed and not yet approved: a question marked noise in more than half of at least five of the owner's runs is reworded or dropped; the marks and the decision go in the question bank's change log. With one user this measures the owner's preference, not general usefulness; phase 9 re-tests with outside builders.
+
 ## What the test shows so far
 
 - Only questions 1 and 2 have a detector today, and 1 only partly. The other seven need new detectors (PRD R9) or are always "needs outside evidence".
