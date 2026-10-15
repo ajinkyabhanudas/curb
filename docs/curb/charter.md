@@ -32,7 +32,7 @@ TypeScript and JavaScript. Static analysis of a local snapshot only. Only TypeSc
 
 ## Non-claims
 
-From the shipped policy card (`unapproved-provider-reference` 1.3.0):
+From the shipped policy card (`unapproved-provider-reference` 1.4.0):
 
 - Does not establish which provider receives data at runtime.
 - Does not establish provider conduct, retention or training use.
@@ -62,8 +62,8 @@ Added by this charter:
 These are hypotheses to test, not results.
 
 - H1: the M2 loop (confirm, scan, report, seeded fix, rerun, delta) works end to end on the synthetic fixtures and on one pinned real repository. Status: a first real-repository measurement is done, against a synthetic obligation, on `vercel/chatbot` at `c2f8235e1f3ea903ad8b7f61447c4f74164b5c58` (`real-repo-measurement-001.md`). Confirm and scan ran end to end and reproduced the same hash on rerun; the seeded-fix and delta half of the loop was exercised on synthetic fixtures only. The first scan found a false-pass gap (model ids held in a catalog) and three false `minified` verdicts, both fixed in card 1.1.0 and evaluator 0.3.0. Two further repositories have since been measured (`real-repo-measurement-002.md`, `-003.md`). Each is one repository: counts on it are observations, not rates.
-- H2: across the unsupported, ambiguous and near-miss cases in scope, the engine produces zero false passes (an unsupported case must give `unknown`, not `pass`). Status: falsified once on a real repository. In measurement 003 a copy without one vendored file returned PASS while nine files imported `@langchain/openai` and eight used `gpt-4o-mini`; the registry does not cover `@langchain/*` packages (CURB-24, CURB-25). H2 stays open until that is fixed and rerun.
-- H3: the same inputs give the same result hash on repeated runs and on different machines. Today the determinism tests vary path, line endings, file creation order, actor and clock on one machine only; cross-machine reproduction is untested (CURB-15).
+- H2: across the unsupported, ambiguous and near-miss cases in scope, the engine produces zero false passes (an unsupported case must give `unknown`, not `pass`). Status: falsified once on a real repository. In measurement 003 a copy without one vendored file returned PASS while nine files imported `@langchain/openai`, because no `@langchain/*` package was registered. Card 1.4.0 registers the LangChain provider packages, and the rescan reports FAIL with 9 findings (CURB-24). Still open: bare model ids are not mapped to a vendor (CURB-25), the card's false-negative list names what remains unflagged, and the evidence is three repositories.
+- H3: the same inputs give the same result hash on repeated runs and on different machines. Status: the determinism tests vary path, line endings, file creation order, actor and clock on one machine. Across machines, two synthetic fixtures gave identical result hashes on macOS arm64, Linux x86_64 and a second macOS arm64 runner (`h3-cross-machine-001.md`, CURB-15). Real repositories, Windows and case-insensitive file systems are untested.
 - H4: in Discover mode, a builder who does not know this area finds at least some of the ranked questions worth acting on, and can tell observed from declared from unknown without coaching. Tested first on paper (phase 2), then by use.
 - H5: the product owner reopens Curb on their own project after a repository change, without being prompted. Tested in phase 7.
 - H6: Controls checks fail on a seeded violation and never pass on missing evidence. Tested in phase 8.
